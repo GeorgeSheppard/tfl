@@ -273,7 +273,7 @@ dialog h2 {
   text-transform: uppercase;
 }
 
-#station-search {
+.search-input {
   width: 100%;
   padding: 0.6rem 0.7rem;
   border-radius: 4px;
@@ -281,6 +281,29 @@ dialog h2 {
   background: var(--surface-raised);
   color: var(--text);
   font-size: 1rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.link-btn {
+  display: block;
+  background: transparent;
+  border: none;
+  color: var(--tfl-blue);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.2rem 0;
+  margin-bottom: 0.6rem;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+#route-picker .search-input {
+  margin-top: 0.2rem;
 }
 
 .result-list {
