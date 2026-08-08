@@ -210,6 +210,12 @@ input:focus-visible {
 
 .arrival {
   display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.arrival-main {
+  display: flex;
   align-items: baseline;
   gap: 0.6rem;
 }
@@ -236,10 +242,6 @@ input:focus-visible {
   border-left: 2px solid var(--border);
 }
 
-.arrival-extra .arrival-location {
-  flex: 1 1 auto;
-}
-
 .arrival-extra .arrival-time {
   font-size: 0.85rem;
   font-weight: 700;
@@ -255,9 +257,10 @@ input:focus-visible {
   font-size: 0.92rem;
 }
 
+/* Own line below the destination/time row — the location text (e.g. "At Edgware Road") can be
+ * long enough to crowd everything else out of a shared row, same font styling as before. */
 .arrival-location {
-  flex: 0 1 auto;
-  min-width: 0;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

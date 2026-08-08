@@ -149,8 +149,10 @@ function renderArrivalGroup(group: ArrivalGroup, index: number): string {
     .map(
       (arrival) => `
         <div class="arrival arrival-secondary">
+          <div class="arrival-main">
+            <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
+          </div>
           <span class="arrival-location">${cleanCurrentLocation(arrival.currentLocation)}</span>
-          <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
         </div>
       `
     )
@@ -159,10 +161,12 @@ function renderArrivalGroup(group: ArrivalGroup, index: number): string {
   return `
     <div class="arrival-group">
       <div class="arrival">
-        <span class="arrival-destination">${cleanDestinationLabel(group.destinationName)}</span>
+        <div class="arrival-main">
+          <span class="arrival-destination">${cleanDestinationLabel(group.destinationName)}</span>
+          <span class="arrival-time">${formatEta(next.timeToStationSeconds)}</span>
+          ${expandBtn}
+        </div>
         <span class="arrival-location">${cleanCurrentLocation(next.currentLocation)}</span>
-        <span class="arrival-time">${formatEta(next.timeToStationSeconds)}</span>
-        ${expandBtn}
       </div>
       ${rest.length > 0 ? `<div class="arrival-extra hidden" data-group-extra="${index}">${extraRows}</div>` : ''}
     </div>
