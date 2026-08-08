@@ -51,6 +51,17 @@ function cleanBranchLabel(label: string): string {
   return cleanDestinationLabel(label.slice(0, viaIndex)) + label.slice(viaIndex);
 }
 
+// TfL's currentLocation sometimes appends a platform reference (e.g. "At Edgware Road Platform
+// 2") — strip it since the platform number isn't useful, just where the train physically is.
+// "At Platform" alone has no station name to keep, so leave it as-is rather than reducing it to
+// just "At".
+function cleanCurrentLocation(location: string): string {
+  const match = location.match(/^(.*?)\s+Platform\s*\d*\s*$/i);
+  if (!match) return location;
+  const stripped = match[1].trim();
+  return stripped.toLowerCase() === 'at' || stripped === '' ? location : stripped;
+}
+
 const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
 
 function directionLabelFor(arrival: Arrival): string {
@@ -137,7 +148,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
         (arrival) => `
           <div class="arrival">
             <span class="arrival-destination">${cleanDestinationLabel(arrival.destinationName)}</span>
-            <span class="arrival-location">${arrival.currentLocation}</span>
+            <span class="arrival-location">${cleanCurrentLocation(arrival.currentLocation)}</span>
             <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
           </div>
         `
