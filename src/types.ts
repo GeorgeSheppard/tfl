@@ -11,6 +11,7 @@ export interface Arrival {
   destinationName: string;
   timeToStationSeconds: number;
   expectedArrival: string;
+  currentLocation: string;
 }
 
 export interface Favourite {

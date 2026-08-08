@@ -96,6 +96,13 @@ button {
   font-size: 0.85rem;
 }
 
+.card-actions {
+  display: flex;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.refresh-btn,
 .remove-btn {
   background: transparent;
   border: none;
@@ -103,6 +110,24 @@ button {
   font-size: 1rem;
   line-height: 1;
   padding: 0.25rem;
+}
+
+.refresh-btn:hover {
+  color: var(--text);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+}
+
+.refresh-btn.spinning {
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .remove-btn:hover {
@@ -116,14 +141,28 @@ button {
   flex-wrap: wrap;
 }
 
-.time {
+.arrival {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.4rem 0.7rem;
+  min-width: 4.5rem;
+}
+
+.time {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-size: 1.1rem;
+}
+
+.location {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: center;
 }
 
 .loading,

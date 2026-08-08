@@ -42,7 +42,10 @@ function renderFavourites(): void {
           <h2>${favourite.stopName}</h2>
           <p class="subtitle">${favourite.lineName} — ${favourite.directionLabel}</p>
         </div>
-        <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
+        <div class="card-actions">
+          <button class="refresh-btn" aria-label="Refresh ${favourite.stopName}">↻</button>
+          <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
+        </div>
       </div>
       <div class="times">
         <span class="loading">Loading…</span>
@@ -55,12 +58,22 @@ function renderFavourites(): void {
       renderFavourites();
     });
 
+    card.querySelector('.refresh-btn')!.addEventListener('click', () => {
+      loadArrivalsForCard(card, favourite);
+    });
+
     loadArrivalsForCard(card, favourite);
   }
 }
 
 async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Promise<void> {
   const timesEl = card.querySelector<HTMLDivElement>('.times')!;
+  const refreshBtn = card.querySelector<HTMLButtonElement>('.refresh-btn')!;
+
+  timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  refreshBtn.disabled = true;
+  refreshBtn.classList.add('spinning');
+
   try {
     const arrivals = await getArrivals(favourite.stopPointId, {
       lineId: favourite.lineId,
@@ -74,10 +87,20 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
     }
 
     timesEl.innerHTML = arrivals
-      .map((arrival) => `<span class="time">${formatEta(arrival.timeToStationSeconds)}</span>`)
+      .map(
+        (arrival) => `
+          <div class="arrival">
+            <span class="time">${formatEta(arrival.timeToStationSeconds)}</span>
+            <span class="location">${arrival.currentLocation}</span>
+          </div>
+        `
+      )
       .join('');
   } catch {
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.classList.remove('spinning');
   }
 }
 
