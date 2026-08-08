@@ -24,7 +24,9 @@ export interface Favourite {
    * present, this is every station on the chosen branch (from TfL's route topology), not just
    * its terminus — so a train that short-turns before reaching the terminus still matches. */
   destinations?: string[];
-  /** Display label for the chosen branch, e.g. "Wimbledon" — the branch's terminus. Undefined
+  /** The backend's raw branch label, e.g. "Wimbledon" or, when disambiguation was needed,
+   * "Morden via Bank" — used for display (after frontend cleanup, see cleanBranchLabel) and as
+   * the uniqueness key in favouriteId, since two branches can share a terminus. Undefined
    * exactly when destinations is undefined. */
-  terminus?: string;
+  label?: string;
 }

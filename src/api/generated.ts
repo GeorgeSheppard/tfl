@@ -610,6 +610,8 @@ export type GetTflBranches200BranchesItem = {
   terminus: string;
   /** Every station downstream of stopPointId on this branch, in travel order — i.e. every value a live arrival's destinationName could legitimately take for a train still on this branch, including ones that short-turn before reaching the terminus */
   destinations: string[];
+  /** Display label — usually just the terminus, but disambiguated with TfL's own "via X" naming when another branch from this stop shares the same terminus (e.g. the Northern line's "Morden via Bank" vs "Morden via Charing Cross") */
+  label: string;
 };
 
 export type GetTflBranches200 = {

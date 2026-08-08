@@ -32,6 +32,16 @@ function cleanDestinationLabel(destinationName: string): string {
   return suffix ? destinationName.slice(0, -suffix.length) : destinationName;
 }
 
+// The backend's label is built from the raw terminus name (e.g. "Wimbledon Underground Station
+// via Bank" when disambiguation is needed), so the " Underground Station"-style suffix cleanup
+// has to happen on just the terminus portion, not blindly on the end of the whole string. " via "
+// is a safe split point — no real station name contains it.
+function cleanBranchLabel(label: string): string {
+  const viaIndex = label.indexOf(' via ');
+  if (viaIndex === -1) return cleanDestinationLabel(label);
+  return cleanDestinationLabel(label.slice(0, viaIndex)) + label.slice(viaIndex);
+}
+
 const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
 
 function directionLabelFor(arrival: Arrival): string {
@@ -54,7 +64,7 @@ function renderFavourites(): void {
     card.dataset.id = favourite.id;
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
-    const destinationSuffix = favourite.terminus ? ` · ${cleanDestinationLabel(favourite.terminus)}` : '';
+    const destinationSuffix = favourite.label ? ` · ${cleanBranchLabel(favourite.label)}` : '';
     card.innerHTML = `
       <div class="card-header">
         <div>
@@ -185,9 +195,9 @@ async function handleStationSelected(station: Station): Promise<void> {
 function createRouteButton(
   station: Station,
   representative: Arrival,
-  label: string,
+  directionLabel: string,
   destinations: string[] | undefined,
-  terminus: string | undefined,
+  branchLabel: string | undefined,
   buttonHtml: string,
   dashed: boolean
 ): HTMLButtonElement {
@@ -197,16 +207,16 @@ function createRouteButton(
   btn.innerHTML = buttonHtml;
   btn.addEventListener('click', () => {
     const favourite: Favourite = {
-      id: favouriteId(station.id, representative.lineId, representative.direction, terminus),
+      id: favouriteId(station.id, representative.lineId, representative.direction, branchLabel),
       stopPointId: station.id,
       stopName: station.name,
       lineId: representative.lineId,
       lineName: representative.lineName,
       // TfL always returns 'inbound'/'outbound' here even though the schema types it as string
       direction: representative.direction as GetTflArrivalsDirection,
-      directionLabel: label,
+      directionLabel,
       destinations,
-      terminus,
+      label: branchLabel,
     };
     addFavourite(favourite);
     dialog.close();
@@ -264,8 +274,8 @@ async function renderRouteResults(station: Station, arrivals: Arrival[]): Promis
             representative,
             label,
             branch.destinations,
-            branch.terminus,
-            `${lineBadge} ${label} · ${cleanDestinationLabel(branch.terminus)}`,
+            branch.label,
+            `${lineBadge} ${label} · ${cleanBranchLabel(branch.label)}`,
             false
           )
         );
