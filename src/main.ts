@@ -1,9 +1,9 @@
 import './style.css';
-import { getArrivals, getBranches, searchStations } from './api';
+import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
 import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
-import { Arrival, Branch, Favourite, Station } from './types';
+import { Arrival, Favourite, Station } from './types';
 
 const favouritesEl = document.querySelector<HTMLDivElement>('#favourites')!;
 const addBtn = document.querySelector<HTMLButtonElement>('#add-btn')!;
@@ -17,8 +17,6 @@ const stationResultsEl = document.querySelector<HTMLDivElement>('#station-result
 const routePickerEl = document.querySelector<HTMLDivElement>('#route-picker')!;
 const changeStationBtn = document.querySelector<HTMLButtonElement>('#change-station-btn')!;
 const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected-station-name')!;
-const destinationSearchInput = document.querySelector<HTMLInputElement>('#destination-search')!;
-const destinationResultsEl = document.querySelector<HTMLDivElement>('#destination-results')!;
 const stepBackBtn = document.querySelector<HTMLButtonElement>('#step-back-btn')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
 
@@ -35,20 +33,10 @@ const DESTINATION_SUFFIXES = [
 ];
 
 // TfL's destinationName is the full official station name (e.g. "Wimbledon Underground
-// Station") — display-only cleanup, the raw value is still what's stored/filtered on.
+// Station") — display-only cleanup, the raw value is still what's grouped on.
 function cleanDestinationLabel(destinationName: string): string {
   const suffix = DESTINATION_SUFFIXES.find((s) => destinationName.endsWith(s));
   return suffix ? destinationName.slice(0, -suffix.length) : destinationName;
-}
-
-// The backend's label is built from the raw terminus name (e.g. "Wimbledon Underground Station
-// via Bank" when disambiguation is needed), so the " Underground Station"-style suffix cleanup
-// has to happen on just the terminus portion, not blindly on the end of the whole string. " via "
-// is a safe split point — no real station name contains it.
-function cleanBranchLabel(label: string): string {
-  const viaIndex = label.indexOf(' via ');
-  if (viaIndex === -1) return cleanDestinationLabel(label);
-  return cleanDestinationLabel(label.slice(0, viaIndex)) + label.slice(viaIndex);
 }
 
 // TfL's currentLocation sometimes appends a platform reference (e.g. "At Edgware Road Platform
@@ -88,14 +76,13 @@ function renderFavourites(): void {
     card.dataset.id = favourite.id;
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
-    const destinationSuffix = favourite.label ? ` · ${cleanBranchLabel(favourite.label)}` : '';
     card.innerHTML = `
       <div class="card-header">
         <div>
           <h2>${favourite.stopName}</h2>
           <p class="subtitle">
             <span class="line-badge">${favourite.lineName}</span>
-            ${favourite.directionLabel}${destinationSuffix}
+            ${favourite.directionLabel}
           </p>
         </div>
         <div class="card-actions">
@@ -122,6 +109,80 @@ function renderFavourites(): void {
   }
 }
 
+// Enough arrivals to see every destination currently running on this line/direction, not just
+// the next couple — grouping below picks the soonest per destination out of this window.
+const ARRIVALS_WINDOW = 20;
+
+interface ArrivalGroup {
+  destinationName: string;
+  arrivals: Arrival[];
+}
+
+// Groups arrivals by destination and shows the soonest train to each one, e.g. if trains to
+// Richmond are 1/3/5 minutes away and one to Wimbledon is 7, Richmond is shown once (at 1 min)
+// with the other two tucked behind an expandable "+2 more" — the user only ever picked a
+// direction, not a specific destination, so every one of these is a valid train to catch.
+function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
+  const byDestination = new Map<string, Arrival[]>();
+  for (const arrival of arrivals) {
+    const group = byDestination.get(arrival.destinationName);
+    if (group) group.push(arrival);
+    else byDestination.set(arrival.destinationName, [arrival]);
+  }
+
+  return [...byDestination.entries()]
+    .map(([destinationName, group]) => ({
+      destinationName,
+      arrivals: group.sort((a, b) => a.timeToStationSeconds - b.timeToStationSeconds),
+    }))
+    .sort((a, b) => a.arrivals[0].timeToStationSeconds - b.arrivals[0].timeToStationSeconds);
+}
+
+function renderArrivalGroup(group: ArrivalGroup, index: number): string {
+  const [next, ...rest] = group.arrivals;
+  const expandLabel = `+${rest.length} more`;
+  const expandBtn =
+    rest.length > 0
+      ? `<button class="expand-btn" type="button" data-group="${index}" data-label="${expandLabel}">${expandLabel}</button>`
+      : '';
+  const extraRows = rest
+    .map(
+      (arrival) => `
+        <div class="arrival arrival-secondary">
+          <span class="arrival-location">${cleanCurrentLocation(arrival.currentLocation)}</span>
+          <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
+        </div>
+      `
+    )
+    .join('');
+
+  return `
+    <div class="arrival-group">
+      <div class="arrival">
+        <span class="arrival-destination">${cleanDestinationLabel(group.destinationName)}</span>
+        <span class="arrival-location">${cleanCurrentLocation(next.currentLocation)}</span>
+        <span class="arrival-time">${formatEta(next.timeToStationSeconds)}</span>
+        ${expandBtn}
+      </div>
+      ${rest.length > 0 ? `<div class="arrival-extra hidden" data-group-extra="${index}">${extraRows}</div>` : ''}
+    </div>
+  `;
+}
+
+function attachExpandListeners(timesEl: HTMLElement): void {
+  timesEl.querySelectorAll<HTMLButtonElement>('.expand-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const extra = timesEl.querySelector<HTMLDivElement>(
+        `[data-group-extra="${btn.dataset.group}"]`
+      );
+      if (!extra) return;
+      const isHidden = extra.classList.contains('hidden');
+      extra.classList.toggle('hidden');
+      btn.textContent = isHidden ? 'Show less' : (btn.dataset.label ?? '');
+    });
+  });
+}
+
 async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Promise<void> {
   const timesEl = card.querySelector<HTMLDivElement>('.times')!;
   const refreshBtn = card.querySelector<HTMLButtonElement>('.refresh-btn')!;
@@ -134,8 +195,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
     const arrivals = await getArrivals(favourite.stopPointId, {
       lineId: favourite.lineId,
       direction: favourite.direction,
-      destinationName: favourite.destinations,
-      limit: 3,
+      limit: ARRIVALS_WINDOW,
     });
 
     if (arrivals.length === 0) {
@@ -143,17 +203,9 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
       return;
     }
 
-    timesEl.innerHTML = arrivals
-      .map(
-        (arrival) => `
-          <div class="arrival">
-            <span class="arrival-destination">${cleanDestinationLabel(arrival.destinationName)}</span>
-            <span class="arrival-location">${cleanCurrentLocation(arrival.currentLocation)}</span>
-            <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
-          </div>
-        `
-      )
-      .join('');
+    const groups = groupArrivalsByDestination(arrivals);
+    timesEl.innerHTML = groups.map((group, index) => renderArrivalGroup(group, index)).join('');
+    attachExpandListeners(timesEl);
   } catch {
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
   } finally {
@@ -169,31 +221,18 @@ interface RouteOption {
   lineName: string;
   direction: GetTflArrivalsDirection;
   directionLabel: string;
-  representative: Arrival;
 }
 
 let currentStation: Station | undefined;
 let routeOptions: RouteOption[] = [];
-// Keyed by `${lineId}:${direction}` — populated on demand as lines are drilled into or the
-// destination search needs to check across all of them. The backend also caches the underlying
-// TfL topology call, so re-fetching here is cheap even if the cache gets cleared per dialog open.
-// Caches the in-flight promise (not just the resolved value) so a prefetch kicked off early and
-// a later resolveBranches() call for the same line/direction share one request instead of two.
-const branchesCache = new Map<string, Promise<Branch[]>>();
-// Populated once a branchesCache entry settles — lets resolveBranches() check synchronously
-// whether it can skip the loading state entirely.
-const resolvedBranches = new Map<string, Branch[]>();
 
 let searchDebounce: number | undefined;
-let destinationSearchDebounce: number | undefined;
 
 function openAddDialog(): void {
   searchInput.value = '';
   stationResultsEl.innerHTML = '';
   currentStation = undefined;
   routeOptions = [];
-  branchesCache.clear();
-  resolvedBranches.clear();
   stationPickerEl.classList.remove('hidden');
   routePickerEl.classList.add('hidden');
   dialog.showModal();
@@ -243,15 +282,12 @@ async function handleStationSelected(station: Station): Promise<void> {
   stationPickerEl.classList.add('hidden');
   routePickerEl.classList.remove('hidden');
 
-  destinationSearchInput.value = '';
-  destinationResultsEl.innerHTML = '';
-  showStepResults();
   stepResultsEl.innerHTML = `<p class="loading">Loading lines…</p>`;
   hideStepBack();
-  branchesCache.clear();
-  resolvedBranches.clear();
 
   try {
+    // High limit here — this is a live snapshot used only to discover which lines/directions
+    // are currently running at this station, not the arrivals themselves.
     const arrivals = await getArrivals(station.id, { limit: 50 });
     const byLineDirection = new Map<string, RouteOption>();
     for (const arrival of arrivals) {
@@ -262,7 +298,6 @@ async function handleStationSelected(station: Station): Promise<void> {
           lineName: arrival.lineName,
           direction: arrival.direction as GetTflArrivalsDirection,
           directionLabel: directionLabelFor(arrival),
-          representative: arrival,
         });
       }
     }
@@ -273,12 +308,10 @@ async function handleStationSelected(station: Station): Promise<void> {
       return;
     }
 
-    prefetchBranches(routeOptions);
-
     const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
     if (distinctLineIds.size === 1) {
-      // Nothing to pick between — skip straight to the direction/branch step.
-      await showDirections(routeOptions[0].lineId, undefined);
+      // Nothing to pick between — skip straight to the direction step.
+      showDirections(routeOptions[0].lineId, undefined);
     } else {
       showLines();
     }
@@ -287,27 +320,15 @@ async function handleStationSelected(station: Station): Promise<void> {
   }
 }
 
-let stepBackVisible = false;
-
 function showStepBack(label: string, onClick: () => void): void {
   stepBackBtn.textContent = label;
   stepBackBtn.onclick = onClick;
-  stepBackVisible = true;
   stepBackBtn.classList.remove('hidden');
 }
 
 function hideStepBack(): void {
   stepBackBtn.onclick = null;
-  stepBackVisible = false;
   stepBackBtn.classList.add('hidden');
-}
-
-// Restores the step container after the destination search (which hides it) is cleared —
-// showStepBack()/hideStepBack() remain the source of truth for whether the back button itself
-// should be visible.
-function showStepResults(): void {
-  stepResultsEl.classList.remove('hidden');
-  stepBackBtn.classList.toggle('hidden', !stepBackVisible);
 }
 
 function showLines(): void {
@@ -331,14 +352,17 @@ function showLines(): void {
 
 // onBack is undefined when there was nothing to pick before this step (single line overall) —
 // in that case there's nowhere meaningful to go back to except the station search.
-async function showDirections(lineId: string, onBack: (() => void) | undefined): Promise<void> {
+function showDirections(lineId: string, onBack: (() => void) | undefined): void {
+  if (!currentStation) return;
+  const station = currentStation;
+
   const lineOptions = routeOptions.filter((o) => o.lineId === lineId);
   if (lineOptions.length === 0) return;
 
   if (lineOptions.length === 1) {
-    // Only one direction actually running at this station for this line — skip straight to
-    // the branch step.
-    await resolveBranches(lineOptions[0], onBack);
+    // Only one direction actually running at this station for this line — nothing left to
+    // choose, add it directly.
+    addFavouriteAndClose(station, lineOptions[0]);
     return;
   }
 
@@ -352,203 +376,27 @@ async function showDirections(lineId: string, onBack: (() => void) | undefined):
     btn.className = 'result-btn';
     btn.style.setProperty('--line-color', lineColor(option.lineId));
     btn.innerHTML = `${lineBadge} ${option.directionLabel}`;
-    btn.addEventListener('click', () => resolveBranches(option, () => showDirections(lineId, onBack)));
+    btn.addEventListener('click', () => addFavouriteAndClose(station, option));
     stepResultsEl.appendChild(btn);
   }
 }
 
-function getBranchesFor(lineId: string, direction: GetTflArrivalsDirection): Promise<Branch[]> {
-  const key = `${lineId}:${direction}`;
-  const cached = branchesCache.get(key);
-  if (cached) return cached;
-
-  const promise = getBranches(currentStation!.id, lineId, direction);
-  promise.then(
-    (branches) => resolvedBranches.set(key, branches),
-    // Don't cache a failed fetch — let a later call (prefetch or resolveBranches) retry.
-    () => branchesCache.delete(key)
-  );
-  branchesCache.set(key, promise);
-  return promise;
-}
-
-// Kicks off branch fetches for every line/direction combo as soon as we know them, so by the
-// time the user drills down to one, it's already resolved (or well underway) instead of showing
-// a "Loading branches…" spinner at that step.
-function prefetchBranches(options: RouteOption[]): void {
-  const seen = new Set<string>();
-  for (const option of options) {
-    const key = `${option.lineId}:${option.direction}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    getBranchesFor(option.lineId, option.direction).catch(() => {
-      // Swallow here — resolveBranches() surfaces the failure when the user actually gets there.
-    });
-  }
-}
-
-// onBack is undefined exactly when this is the very first (and only) thing to show — a station
-// with one line and one direction and, below, more than one branch.
-async function resolveBranches(
-  option: RouteOption,
-  onBack: (() => void) | undefined
-): Promise<void> {
-  if (!currentStation) return;
-  const station = currentStation;
-
-  if (onBack) showStepBack('← Back', onBack);
-  else hideStepBack();
-
-  const key = `${option.lineId}:${option.direction}`;
-  // Only show a loading state if the prefetch kicked off in handleStationSelected() hasn't
-  // resolved yet — the common case is it already has, by the time the user drills down here.
-  if (!resolvedBranches.has(key)) {
-    stepResultsEl.innerHTML = `<p class="loading">Loading branches…</p>`;
-  }
-
-  let branches: Branch[] = [];
-  try {
-    branches = await getBranchesFor(option.lineId, option.direction);
-  } catch {
-    // Fall through with no branches — treated the same as "no real branching", below.
-  }
-
-  if (branches.length <= 1) {
-    // Nothing to choose between — add directly. Use the one branch's specific destinations if
-    // we found one (keeps short-turning trains covered), otherwise fall back to unfiltered.
-    const branch = branches[0];
-    addFavouriteAndClose(station, option, branch?.destinations, branch?.label);
-    return;
-  }
-
-  const lineBadge = lineBadgeHtml(option.lineId, option.lineName);
-  const elements: HTMLElement[] = [
-    createRouteButton(
-      station,
-      option,
-      undefined,
-      undefined,
-      `${lineBadge} ${option.directionLabel} · Any destination`,
-      true
-    ),
-  ];
-  for (const branch of branches) {
-    elements.push(
-      createRouteButton(
-        station,
-        option,
-        branch.destinations,
-        branch.label,
-        `${lineBadge} ${option.directionLabel} · ${cleanBranchLabel(branch.label)}`,
-        false
-      )
-    );
-  }
-
-  stepResultsEl.innerHTML = '';
-  for (const el of elements) stepResultsEl.appendChild(el);
-}
-
-async function handleDestinationSearch(): Promise<void> {
-  const rawQuery = destinationSearchInput.value.trim();
-  const query = rawQuery.toLowerCase();
-
-  if (query.length < 2) {
-    destinationResultsEl.innerHTML = '';
-    showStepResults();
-    return;
-  }
-
-  stepBackBtn.classList.add('hidden');
-  stepResultsEl.classList.add('hidden');
-  destinationResultsEl.innerHTML = `<p class="loading">Searching…</p>`;
-
-  try {
-    await Promise.all(routeOptions.map((o) => getBranchesFor(o.lineId, o.direction)));
-
-    const matches: HTMLElement[] = [];
-    for (const option of routeOptions) {
-      if (!currentStation) continue;
-      const branches = resolvedBranches.get(`${option.lineId}:${option.direction}`) ?? [];
-      const lineBadge = lineBadgeHtml(option.lineId, option.lineName);
-
-      for (const branch of branches) {
-        const isMatch = branch.destinations.some((destination) =>
-          cleanDestinationLabel(destination).toLowerCase().includes(query)
-        );
-        if (!isMatch) continue;
-
-        matches.push(
-          createRouteButton(
-            currentStation,
-            option,
-            branch.destinations,
-            branch.label,
-            `${lineBadge} ${option.directionLabel} · ${cleanBranchLabel(branch.label)}`,
-            false
-          )
-        );
-      }
-    }
-
-    destinationResultsEl.innerHTML = '';
-    if (matches.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'empty';
-      empty.textContent = `No direct trains found for "${rawQuery}"`;
-      destinationResultsEl.appendChild(empty);
-      return;
-    }
-    for (const match of matches) destinationResultsEl.appendChild(match);
-  } catch {
-    destinationResultsEl.innerHTML = `<p class="error">Search failed, try again</p>`;
-  }
-}
-
-function buildFavourite(
-  station: Station,
-  option: RouteOption,
-  destinations: string[] | undefined,
-  branchLabel: string | undefined
-): Favourite {
+function buildFavourite(station: Station, option: RouteOption): Favourite {
   return {
-    id: favouriteId(station.id, option.lineId, option.direction, branchLabel),
+    id: favouriteId(station.id, option.lineId, option.direction),
     stopPointId: station.id,
     stopName: station.name,
     lineId: option.lineId,
     lineName: option.lineName,
     direction: option.direction,
     directionLabel: option.directionLabel,
-    destinations,
-    label: branchLabel,
   };
 }
 
-function addFavouriteAndClose(
-  station: Station,
-  option: RouteOption,
-  destinations: string[] | undefined,
-  branchLabel: string | undefined
-): void {
-  addFavourite(buildFavourite(station, option, destinations, branchLabel));
+function addFavouriteAndClose(station: Station, option: RouteOption): void {
+  addFavourite(buildFavourite(station, option));
   dialog.close();
   renderFavourites();
-}
-
-function createRouteButton(
-  station: Station,
-  option: RouteOption,
-  destinations: string[] | undefined,
-  branchLabel: string | undefined,
-  buttonHtml: string,
-  dashed: boolean
-): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.className = dashed ? 'result-btn result-btn--any' : 'result-btn';
-  btn.style.setProperty('--line-color', lineColor(option.lineId));
-  btn.innerHTML = buttonHtml;
-  btn.addEventListener('click', () => addFavouriteAndClose(station, option, destinations, branchLabel));
-  return btn;
 }
 
 addBtn.addEventListener('click', openAddDialog);
@@ -558,11 +406,6 @@ changeStationBtn.addEventListener('click', backToStationPicker);
 searchInput.addEventListener('input', () => {
   window.clearTimeout(searchDebounce);
   searchDebounce = window.setTimeout(handleStationSearch, 300);
-});
-
-destinationSearchInput.addEventListener('input', () => {
-  window.clearTimeout(destinationSearchDebounce);
-  destinationSearchDebounce = window.setTimeout(handleDestinationSearch, 300);
 });
 
 renderFavourites();
