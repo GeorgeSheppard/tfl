@@ -10,6 +10,9 @@ const addBtn = document.querySelector<HTMLButtonElement>('#add-btn')!;
 const dialog = document.querySelector<HTMLDialogElement>('#add-dialog')!;
 const cancelBtn = document.querySelector<HTMLButtonElement>('#cancel-add')!;
 
+// Track in-flight requests per favourite to cancel if a new request comes in
+const inFlightRequests = new Map<string, AbortController>();
+
 const stationPickerEl = document.querySelector<HTMLDivElement>('#station-picker')!;
 const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
 const stationResultsEl = document.querySelector<HTMLDivElement>('#station-results')!;
@@ -61,12 +64,38 @@ function lineBadgeHtml(lineId: string, lineName: string): string {
   return `<span class="line-badge" style="--line-color: ${lineColor(lineId)}; --line-text-color: ${lineTextColor(lineId)}">${lineName}</span>`;
 }
 
+// Auto-refresh interval ID
+let autoRefreshInterval: number | undefined;
+
+function startAutoRefresh(): void {
+  // Clear any existing interval
+  if (autoRefreshInterval) {
+    window.clearInterval(autoRefreshInterval);
+  }
+
+  // Auto-refresh all favourites every 15 seconds
+  autoRefreshInterval = window.setInterval(() => {
+    const favourites = getFavourites();
+    for (const favourite of favourites) {
+      const card = document.querySelector<HTMLElement>(`[data-id="${favourite.id}"]`);
+      if (card) {
+        loadArrivalsForCard(card, favourite);
+      }
+    }
+  }, 15000);
+}
+
 function renderFavourites(): void {
   const favourites = getFavourites();
   favouritesEl.innerHTML = '';
 
   if (favourites.length === 0) {
     favouritesEl.innerHTML = `<p class="empty">No stations yet. Tap "+ Add" to add your first one.</p>`;
+    // Stop auto-refresh if no favourites
+    if (autoRefreshInterval) {
+      window.clearInterval(autoRefreshInterval);
+      autoRefreshInterval = undefined;
+    }
     return;
   }
 
@@ -107,6 +136,9 @@ function renderFavourites(): void {
 
     loadArrivalsForCard(card, favourite);
   }
+
+  // Start auto-refresh when there are favourites
+  startAutoRefresh();
 }
 
 // Enough arrivals to see every destination currently running on this line/direction, not just
@@ -163,6 +195,16 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   const timesEl = card.querySelector<HTMLDivElement>('.times')!;
   const refreshBtn = card.querySelector<HTMLButtonElement>('.refresh-btn')!;
 
+  // Cancel any previous in-flight request for this favourite
+  const previousController = inFlightRequests.get(favourite.id);
+  if (previousController) {
+    previousController.abort();
+  }
+
+  // Create a new AbortController for this request
+  const controller = new AbortController();
+  inFlightRequests.set(favourite.id, controller);
+
   timesEl.innerHTML = `<span class="loading">Loading…</span>`;
   refreshBtn.disabled = true;
   refreshBtn.classList.add('spinning');
@@ -172,6 +214,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
       lineId: favourite.lineId,
       direction: favourite.direction,
       limit: ARRIVALS_WINDOW,
+      signal: controller.signal,
     });
 
     if (arrivals.length === 0) {
@@ -181,9 +224,17 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
 
     const groups = groupArrivalsByDestination(arrivals);
     timesEl.innerHTML = groups.map((group) => renderArrivalGroup(group)).join('');
-  } catch {
+  } catch (error) {
+    // Don't show error if request was aborted (user triggered a new request)
+    if (error instanceof Error && error.name === 'AbortError') {
+      return;
+    }
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
   } finally {
+    // Clean up the controller if it's the current one
+    if (inFlightRequests.get(favourite.id) === controller) {
+      inFlightRequests.delete(favourite.id);
+    }
     refreshBtn.disabled = false;
     refreshBtn.classList.remove('spinning');
   }
