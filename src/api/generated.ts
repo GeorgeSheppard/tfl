@@ -538,10 +538,6 @@ lineId?: string;
  */
 direction?: GetTflArrivalsDirection;
 /**
- * Filter to one or more destinations, e.g. "Wimbledon" — pass multiple to accept every station on a branch (including short-turning trains), useful for branched lines like the District line. Repeat the param for multiple values.
- */
-destinationName?: string | string[];
-/**
  * Maximum number of arrivals to return
  * @minimum 1
  * @maximum 50
@@ -576,49 +572,6 @@ export type GetTflArrivals200 = {
 };
 
 export type GetTflArrivals500 = {
-  /** Error message */
-  error: string;
-};
-
-export type GetTflBranchesParams = {
-/**
- * TfL StopPoint ID to board at
- * @minLength 1
- */
-stopPointId: string;
-/**
- * e.g. "district"
- * @minLength 1
- */
-lineId: string;
-/**
- * Direction of travel from stopPointId
- */
-direction: GetTflBranchesDirection;
-};
-
-export type GetTflBranchesDirection = typeof GetTflBranchesDirection[keyof typeof GetTflBranchesDirection];
-
-
-export const GetTflBranchesDirection = {
-  inbound: 'inbound',
-  outbound: 'outbound',
-} as const;
-
-export type GetTflBranches200BranchesItem = {
-  /** The branch's actual far terminus, e.g. "Wimbledon" */
-  terminus: string;
-  /** Every station downstream of stopPointId on this branch, in travel order — i.e. every value a live arrival's destinationName could legitimately take for a train still on this branch, including ones that short-turn before reaching the terminus */
-  destinations: string[];
-  /** Display label — usually just the terminus, but disambiguated with TfL's own "via X" naming when another branch from this stop shares the same terminus (e.g. the Northern line's "Morden via Bank" vs "Morden via Charing Cross") */
-  label: string;
-};
-
-export type GetTflBranches200 = {
-  branches: GetTflBranches200BranchesItem[];
-};
-
-export type GetTflBranches500 = {
   /** Error message */
   error: string;
 };
@@ -1189,14 +1142,6 @@ export const getGetTflArrivalsUrl = (params: GetTflArrivalsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    const explodeParameters = ["destinationName"];
-
-    if (Array.isArray(value) && explodeParameters.includes(key)) {
-      value.forEach((v) => {
-        normalizedParams.append(key, v === null ? 'null' : String(v));
-      });
-      return;
-    }
 
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : String(value))
@@ -1214,37 +1159,6 @@ export const getGetTflArrivalsUrl = (params: GetTflArrivalsParams,) => {
 export const getTflArrivals = async (params: GetTflArrivalsParams, options?: Parameters<typeof customFetch>[1]): Promise<GetTflArrivals200> => {
 
   return customFetch<GetTflArrivals200>(getGetTflArrivalsUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export const getGetTflBranchesUrl = (params: GetTflBranchesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/tfl/branches?${stringifiedParams}` : `/tfl/branches`
-}
-
-/**
- * Get the physical branches available from a station in a given direction, derived from TfL's line topology — lets a favourite be scoped to a whole branch (e.g. every station on the Wimbledon branch) rather than one specific train destination
- */
-export const getTflBranches = async (params: GetTflBranchesParams, options?: Parameters<typeof customFetch>[1]): Promise<GetTflBranches200> => {
-
-  return customFetch<GetTflBranches200>(getGetTflBranchesUrl(params),
   {
     ...options,
     method: 'GET'
