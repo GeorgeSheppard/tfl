@@ -177,7 +177,12 @@ let routeOptions: RouteOption[] = [];
 // Keyed by `${lineId}:${direction}` — populated on demand as lines are drilled into or the
 // destination search needs to check across all of them. The backend also caches the underlying
 // TfL topology call, so re-fetching here is cheap even if the cache gets cleared per dialog open.
-const branchesCache = new Map<string, Branch[]>();
+// Caches the in-flight promise (not just the resolved value) so a prefetch kicked off early and
+// a later resolveBranches() call for the same line/direction share one request instead of two.
+const branchesCache = new Map<string, Promise<Branch[]>>();
+// Populated once a branchesCache entry settles — lets resolveBranches() check synchronously
+// whether it can skip the loading state entirely.
+const resolvedBranches = new Map<string, Branch[]>();
 
 let searchDebounce: number | undefined;
 let destinationSearchDebounce: number | undefined;
@@ -188,6 +193,7 @@ function openAddDialog(): void {
   currentStation = undefined;
   routeOptions = [];
   branchesCache.clear();
+  resolvedBranches.clear();
   stationPickerEl.classList.remove('hidden');
   routePickerEl.classList.add('hidden');
   dialog.showModal();
@@ -243,6 +249,7 @@ async function handleStationSelected(station: Station): Promise<void> {
   stepResultsEl.innerHTML = `<p class="loading">Loading lines…</p>`;
   hideStepBack();
   branchesCache.clear();
+  resolvedBranches.clear();
 
   try {
     const arrivals = await getArrivals(station.id, { limit: 50 });
@@ -265,6 +272,8 @@ async function handleStationSelected(station: Station): Promise<void> {
       stepResultsEl.innerHTML = `<p class="empty">No live arrivals right now, try again later</p>`;
       return;
     }
+
+    prefetchBranches(routeOptions);
 
     const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
     if (distinctLineIds.size === 1) {
@@ -348,14 +357,34 @@ async function showDirections(lineId: string, onBack: (() => void) | undefined):
   }
 }
 
-async function getBranchesFor(lineId: string, direction: GetTflArrivalsDirection): Promise<Branch[]> {
+function getBranchesFor(lineId: string, direction: GetTflArrivalsDirection): Promise<Branch[]> {
   const key = `${lineId}:${direction}`;
   const cached = branchesCache.get(key);
   if (cached) return cached;
 
-  const branches = await getBranches(currentStation!.id, lineId, direction);
-  branchesCache.set(key, branches);
-  return branches;
+  const promise = getBranches(currentStation!.id, lineId, direction);
+  promise.then(
+    (branches) => resolvedBranches.set(key, branches),
+    // Don't cache a failed fetch — let a later call (prefetch or resolveBranches) retry.
+    () => branchesCache.delete(key)
+  );
+  branchesCache.set(key, promise);
+  return promise;
+}
+
+// Kicks off branch fetches for every line/direction combo as soon as we know them, so by the
+// time the user drills down to one, it's already resolved (or well underway) instead of showing
+// a "Loading branches…" spinner at that step.
+function prefetchBranches(options: RouteOption[]): void {
+  const seen = new Set<string>();
+  for (const option of options) {
+    const key = `${option.lineId}:${option.direction}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    getBranchesFor(option.lineId, option.direction).catch(() => {
+      // Swallow here — resolveBranches() surfaces the failure when the user actually gets there.
+    });
+  }
 }
 
 // onBack is undefined exactly when this is the very first (and only) thing to show — a station
@@ -367,9 +396,15 @@ async function resolveBranches(
   if (!currentStation) return;
   const station = currentStation;
 
-  stepResultsEl.innerHTML = `<p class="loading">Loading branches…</p>`;
   if (onBack) showStepBack('← Back', onBack);
   else hideStepBack();
+
+  const key = `${option.lineId}:${option.direction}`;
+  // Only show a loading state if the prefetch kicked off in handleStationSelected() hasn't
+  // resolved yet — the common case is it already has, by the time the user drills down here.
+  if (!resolvedBranches.has(key)) {
+    stepResultsEl.innerHTML = `<p class="loading">Loading branches…</p>`;
+  }
 
   let branches: Branch[] = [];
   try {
@@ -434,7 +469,7 @@ async function handleDestinationSearch(): Promise<void> {
     const matches: HTMLElement[] = [];
     for (const option of routeOptions) {
       if (!currentStation) continue;
-      const branches = branchesCache.get(`${option.lineId}:${option.direction}`) ?? [];
+      const branches = resolvedBranches.get(`${option.lineId}:${option.direction}`) ?? [];
       const lineBadge = lineBadgeHtml(option.lineId, option.lineName);
 
       for (const branch of branches) {
