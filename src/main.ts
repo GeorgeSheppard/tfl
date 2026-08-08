@@ -46,7 +46,7 @@ function renderFavourites(): void {
           <h2>${favourite.stopName}</h2>
           <p class="subtitle">
             <span class="line-badge">${favourite.lineName}</span>
-            ${favourite.directionLabel}
+            ${favourite.directionLabel} · ${favourite.destinationName}
           </p>
         </div>
         <div class="card-actions">
@@ -85,6 +85,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
     const arrivals = await getArrivals(favourite.stopPointId, {
       lineId: favourite.lineId,
       direction: favourite.direction,
+      destinationName: favourite.destinationName,
       limit: 3,
     });
 
@@ -97,8 +98,9 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
       .map(
         (arrival) => `
           <div class="arrival">
-            <span class="time">${formatEta(arrival.timeToStationSeconds)}</span>
-            <span class="location">${arrival.currentLocation}</span>
+            <span class="arrival-destination">${arrival.destinationName}</span>
+            <span class="arrival-location">${arrival.currentLocation}</span>
+            <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
           </div>
         `
       )
@@ -166,9 +168,12 @@ async function handleStationSelected(station: Station): Promise<void> {
 }
 
 function renderRouteResults(station: Station, arrivals: Arrival[]): void {
+  // Keyed by destination too, not just line+direction — branched lines (e.g. District line
+  // splitting into Wimbledon/Richmond/Ealing Broadway) share a lineId and direction, so without
+  // this only one branch would ever show up as a selectable option.
   const seen = new Map<string, Arrival>();
   for (const arrival of arrivals) {
-    const key = `${arrival.lineId}:${arrival.direction}`;
+    const key = `${arrival.lineId}:${arrival.direction}:${arrival.destinationName}`;
     if (!seen.has(key)) seen.set(key, arrival);
   }
 
@@ -184,10 +189,10 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
     const btn = document.createElement('button');
     btn.className = 'result-btn';
     btn.style.setProperty('--line-color', lineColor(arrival.lineId));
-    btn.innerHTML = `<span class="line-badge" style="--line-color: ${lineColor(arrival.lineId)}; --line-text-color: ${lineTextColor(arrival.lineId)}">${arrival.lineName}</span> ${label}`;
+    btn.innerHTML = `<span class="line-badge" style="--line-color: ${lineColor(arrival.lineId)}; --line-text-color: ${lineTextColor(arrival.lineId)}">${arrival.lineName}</span> ${label} · ${arrival.destinationName}`;
     btn.addEventListener('click', () => {
       const favourite: Favourite = {
-        id: favouriteId(station.id, arrival.lineId, arrival.direction),
+        id: favouriteId(station.id, arrival.lineId, arrival.direction, arrival.destinationName),
         stopPointId: station.id,
         stopName: station.name,
         lineId: arrival.lineId,

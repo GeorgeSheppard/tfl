@@ -2,8 +2,13 @@ import { Favourite } from './types';
 
 const STORAGE_KEY = 'tfl.favourites';
 
-export function favouriteId(stopPointId: string, lineId: string, direction: string): string {
-  return `${stopPointId}:${lineId}:${direction}`;
+export function favouriteId(
+  stopPointId: string,
+  lineId: string,
+  direction: string,
+  destinationName: string
+): string {
+  return `${stopPointId}:${lineId}:${direction}:${destinationName}`;
 }
 
 export function getFavourites(): Favourite[] {

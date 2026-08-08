@@ -538,9 +538,13 @@ lineId?: string;
  */
 direction?: GetTflArrivalsDirection;
 /**
+ * Filter to a specific destination, e.g. "Wimbledon" — useful for branched lines like the District line
+ */
+destinationName?: string;
+/**
  * Maximum number of arrivals to return
  * @minimum 1
- * @maximum 20
+ * @maximum 50
  */
 limit?: number;
 };

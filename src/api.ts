@@ -8,7 +8,12 @@ export async function searchStations(query: string): Promise<Station[]> {
 
 export async function getArrivals(
   stopPointId: string,
-  options: { lineId?: string; direction?: GetTflArrivalsDirection; limit?: number } = {}
+  options: {
+    lineId?: string;
+    direction?: GetTflArrivalsDirection;
+    destinationName?: string;
+    limit?: number;
+  } = {}
 ): Promise<Arrival[]> {
   const { arrivals } = await getTflArrivals({ stopPointId, ...options });
   return arrivals;
