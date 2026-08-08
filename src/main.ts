@@ -2,6 +2,7 @@ import './style.css';
 import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
 import { GetTflArrivalsDirection } from './api/generated';
+import { lineColor, lineTextColor } from './lines';
 import { Arrival, Favourite, Station } from './types';
 
 const favouritesEl = document.querySelector<HTMLDivElement>('#favourites')!;
@@ -37,11 +38,16 @@ function renderFavourites(): void {
     const card = document.createElement('article');
     card.className = 'card';
     card.dataset.id = favourite.id;
+    card.style.setProperty('--line-color', lineColor(favourite.lineId));
+    card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
     card.innerHTML = `
       <div class="card-header">
         <div>
           <h2>${favourite.stopName}</h2>
-          <p class="subtitle">${favourite.lineName} — ${favourite.directionLabel}</p>
+          <p class="subtitle">
+            <span class="line-badge">${favourite.lineName}</span>
+            ${favourite.directionLabel}
+          </p>
         </div>
         <div class="card-actions">
           <button class="refresh-btn" aria-label="Refresh ${favourite.stopName}">↻</button>
@@ -177,7 +183,8 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
     const label = directionLabelFor(arrival);
     const btn = document.createElement('button');
     btn.className = 'result-btn';
-    btn.textContent = `${arrival.lineName} — ${label}`;
+    btn.style.setProperty('--line-color', lineColor(arrival.lineId));
+    btn.innerHTML = `<span class="line-badge" style="--line-color: ${lineColor(arrival.lineId)}; --line-text-color: ${lineTextColor(arrival.lineId)}">${arrival.lineName}</span> ${label}`;
     btn.addEventListener('click', () => {
       const favourite: Favourite = {
         id: favouriteId(station.id, arrival.lineId, arrival.direction),
