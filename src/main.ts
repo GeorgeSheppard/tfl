@@ -118,10 +118,10 @@ interface ArrivalGroup {
   arrivals: Arrival[];
 }
 
-// Groups arrivals by destination and shows the soonest train to each one, e.g. if trains to
-// Richmond are 1/3/5 minutes away and one to Wimbledon is 7, Richmond is shown once (at 1 min)
-// with the other two tucked behind an expandable "+2 more" — the user only ever picked a
-// direction, not a specific destination, so every one of these is a valid train to catch.
+// Groups arrivals by destination — e.g. if trains to Richmond are 1/3/5 minutes away and one to
+// Wimbledon is 7, Richmond and Wimbledon are shown as two rows. Only the destination is worth
+// grouping by: once a train's already past this station and heading your way, the specific stop
+// it's currently sitting at doesn't matter beyond the very next one.
 function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
   const byDestination = new Map<string, Arrival[]>();
   for (const arrival of arrivals) {
@@ -138,53 +138,25 @@ function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
     .sort((a, b) => a.arrivals[0].timeToStationSeconds - b.arrivals[0].timeToStationSeconds);
 }
 
-function renderArrivalGroup(group: ArrivalGroup, index: number): string {
-  const [next, ...rest] = group.arrivals;
-  const expandLabel = `+${rest.length} more`;
-  const expandBtn =
-    rest.length > 0
-      ? `<button class="expand-btn" type="button" data-group="${index}" data-label="${expandLabel}">${expandLabel}</button>`
-      : '';
-  const extraRows = rest
-    .map(
-      (arrival) => `
-        <div class="arrival arrival-secondary">
-          <div class="arrival-main">
-            <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
-          </div>
-          <span class="arrival-location">${cleanCurrentLocation(arrival.currentLocation)}</span>
-        </div>
-      `
-    )
-    .join('');
+// e.g. [Due, 300, 1140] -> "Due, 5, 19 min" — one shared "min" suffix instead of repeating it.
+function formatEtaList(arrivals: Arrival[]): string {
+  const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds));
+  return labels.map((label, i) => (i === labels.length - 1 ? label : label.replace(' min', ''))).join(', ');
+}
 
+function renderArrivalGroup(group: ArrivalGroup): string {
+  const [next] = group.arrivals;
   return `
     <div class="arrival-group">
       <div class="arrival">
         <div class="arrival-main">
           <span class="arrival-destination">${cleanDestinationLabel(group.destinationName)}</span>
-          <span class="arrival-time">${formatEta(next.timeToStationSeconds)}</span>
-          ${expandBtn}
+          <span class="arrival-time">${formatEtaList(group.arrivals)}</span>
         </div>
         <span class="arrival-location">${cleanCurrentLocation(next.currentLocation)}</span>
       </div>
-      ${rest.length > 0 ? `<div class="arrival-extra hidden" data-group-extra="${index}">${extraRows}</div>` : ''}
     </div>
   `;
-}
-
-function attachExpandListeners(timesEl: HTMLElement): void {
-  timesEl.querySelectorAll<HTMLButtonElement>('.expand-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const extra = timesEl.querySelector<HTMLDivElement>(
-        `[data-group-extra="${btn.dataset.group}"]`
-      );
-      if (!extra) return;
-      const isHidden = extra.classList.contains('hidden');
-      extra.classList.toggle('hidden');
-      btn.textContent = isHidden ? 'Show less' : (btn.dataset.label ?? '');
-    });
-  });
 }
 
 async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Promise<void> {
@@ -208,8 +180,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
     }
 
     const groups = groupArrivalsByDestination(arrivals);
-    timesEl.innerHTML = groups.map((group, index) => renderArrivalGroup(group, index)).join('');
-    attachExpandListeners(timesEl);
+    timesEl.innerHTML = groups.map((group) => renderArrivalGroup(group)).join('');
   } catch {
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
   } finally {

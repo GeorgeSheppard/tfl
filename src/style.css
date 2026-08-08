@@ -220,33 +220,6 @@ input:focus-visible {
   gap: 0.6rem;
 }
 
-.expand-btn {
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  color: var(--tfl-blue);
-  font-weight: 700;
-  font-size: 0.72rem;
-}
-
-.expand-btn:hover {
-  text-decoration: underline;
-}
-
-.arrival-extra {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.3rem;
-  padding-left: 0.2rem;
-  border-left: 2px solid var(--border);
-}
-
-.arrival-extra .arrival-time {
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
 .arrival-destination {
   flex: 1 1 auto;
   min-width: 0;
