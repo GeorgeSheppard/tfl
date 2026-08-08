@@ -6,11 +6,15 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "fetch:schema": "curl -o openapi.json https://raw.githubusercontent.com/GeorgeSheppard/api.georgesheppard.dev/master/generated/openapi/georgesheppard-spec.json",
+    "generate:api": "orval --config orval.config.ts",
+    "prebuild": "pnpm fetch:schema && pnpm generate:api",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
+    "orval": "^8.23.0",
     "typescript": "^5.6.3",
     "vite": "^7.1.5",
     "vite-plugin-singlefile": "^2.3.0"

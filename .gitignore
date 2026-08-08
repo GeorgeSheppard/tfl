@@ -3,3 +3,6 @@ dist
 .env
 .env.local
 *.log
+
+# Fetched fresh from the backend on every build (see `pnpm fetch:schema`)
+openapi.json
