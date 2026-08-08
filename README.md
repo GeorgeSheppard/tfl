@@ -8,6 +8,10 @@ underground before you lose signal.
 - `vite-plugin-singlefile` inlines all CSS and JS into a single `index.html` at build time,
   so the whole app loads in one HTTP request.
 - Favourite stations are stored in `localStorage` — no login, no backend state.
+- The loading state is a pixel-art S Stock train (`src/train-loader.ts`), rasterised pixel by
+  pixel onto a 96×62 canvas rather than shipped as an image — `viteSingleFile` base64-inlines
+  every asset, so a sprite sheet would land in the same single request. It adds 2.6KB gzipped,
+  less than one PNG frame, and stays sharp at any size.
 - Live arrival data is proxied through `api.georgesheppard.dev` (see the `/tfl/*` endpoints
   in the `api.georgesheppard.dev` repo), which holds the TfL API key.
 - The API client is generated from the backend's OpenAPI schema with

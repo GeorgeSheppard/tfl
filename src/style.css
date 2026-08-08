@@ -257,6 +257,20 @@ input:focus-visible {
   font-size: 0.9rem;
 }
 
+/* The train is rasterised at 96×62 and upscaled by the browser, so nearest-neighbour filtering
+ * is what keeps the pixels square instead of smearing them. */
+.train-loader {
+  display: flex;
+  justify-content: center;
+  padding: 0.15rem 0 0.3rem;
+}
+
+.train-loader canvas {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
 .error {
   color: var(--danger);
 }

@@ -3,6 +3,7 @@ import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
 import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
+import { createTrainLoader } from './train-loader';
 import { Arrival, Favourite, Station } from './types';
 
 const favouritesEl = document.querySelector<HTMLDivElement>('#favourites')!;
@@ -90,9 +91,7 @@ function renderFavourites(): void {
           <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
         </div>
       </div>
-      <div class="times">
-        <span class="loading">Loading…</span>
-      </div>
+      <div class="times"></div>
     `;
     favouritesEl.appendChild(card);
 
@@ -163,7 +162,10 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   const timesEl = card.querySelector<HTMLDivElement>('.times')!;
   const refreshBtn = card.querySelector<HTMLButtonElement>('.refresh-btn')!;
 
-  timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  // The loader owns a canvas driven by a shared animation loop, so it has to be unregistered
+  // however this call ends — every branch below replaces the element it lives in.
+  const loader = createTrainLoader({ label: `Loading arrivals for ${favourite.stopName}` });
+  timesEl.replaceChildren(loader.el);
   refreshBtn.disabled = true;
   refreshBtn.classList.add('spinning');
 
@@ -184,6 +186,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   } catch {
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
   } finally {
+    loader.destroy();
     refreshBtn.disabled = false;
     refreshBtn.classList.remove('spinning');
   }
