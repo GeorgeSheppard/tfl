@@ -11,14 +11,14 @@
 :root {
   --tfl-blue: #0019a8;
   --tfl-red: #dc241f;
-  --bg: #04081a;
-  --surface: #0d1530;
-  --surface-raised: #131c3f;
-  --border: #232f5c;
-  --text: #f5f7ff;
-  --muted: #93a0c9;
-  --danger: #ff6b6b;
-  color-scheme: dark;
+  --bg: #eef1f9;
+  --surface: #ffffff;
+  --surface-raised: #f3f5fb;
+  --border: #d7deef;
+  --text: #0d1530;
+  --muted: #5b6485;
+  --danger: #b3261e;
+  color-scheme: light;
 }
 
 * {
@@ -114,6 +114,7 @@ input:focus-visible {
   border-left: 4px solid var(--line-color, var(--tfl-blue));
   border-radius: 6px;
   padding: 0.9rem 1rem;
+  box-shadow: 0 1px 2px rgba(13, 21, 48, 0.06);
 }
 
 .card-header {
@@ -132,6 +133,7 @@ input:focus-visible {
 .subtitle {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin: 0.3rem 0 0;
   color: var(--muted);
@@ -192,34 +194,50 @@ input:focus-visible {
 
 .times {
   display: flex;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  margin-top: 0.6rem;
 }
 
 .arrival {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  background: var(--bg);
-  border-bottom: 3px solid var(--line-color, var(--tfl-blue));
-  border-radius: 4px;
-  padding: 0.45rem 0.7rem;
-  min-width: 4.5rem;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
 }
 
-.time {
+.arrival:first-child {
+  border-top: none;
+  padding-top: 0.1rem;
+}
+
+.arrival-destination {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.arrival-location {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.arrival-time {
+  flex-shrink: 0;
+  min-width: 2.8rem;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  font-size: 1.2rem;
-  letter-spacing: 0.02em;
-}
-
-.location {
-  color: var(--muted);
-  font-size: 0.68rem;
-  text-align: center;
+  font-size: 1rem;
 }
 
 .loading,
@@ -244,7 +262,7 @@ dialog {
 }
 
 dialog::backdrop {
-  background: rgba(2, 4, 12, 0.75);
+  background: rgba(13, 21, 48, 0.45);
 }
 
 dialog h2 {
@@ -260,7 +278,7 @@ dialog h2 {
   padding: 0.6rem 0.7rem;
   border-radius: 4px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-raised);
   color: var(--text);
   font-size: 1rem;
 }
@@ -290,6 +308,11 @@ dialog h2 {
 
 .result-btn:hover {
   border-color: var(--tfl-blue);
+}
+
+.result-btn--any {
+  border-style: dashed;
+  font-weight: 600;
 }
 
 .dialog-actions {
