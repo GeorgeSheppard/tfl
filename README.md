@@ -1,4 +1,4 @@
-# tfl
+# Platform
 
 A tiny, extremely fast single-page app that shows the next 3 tube arrivals for whichever
 station/line/direction combos you care about — built for checking on the way into the

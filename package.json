@@ -1,5 +1,5 @@
 {
-  "name": "tfl",
+  "name": "platform",
   "version": "1.0.0",
   "description": "Next tube times for your favourite station/line/direction combos",
   "type": "module",
