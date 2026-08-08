@@ -40,13 +40,14 @@ function renderFavourites(): void {
     card.dataset.id = favourite.id;
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
+    const destinationSuffix = favourite.destinationName ? ` · ${favourite.destinationName}` : '';
     card.innerHTML = `
       <div class="card-header">
         <div>
           <h2>${favourite.stopName}</h2>
           <p class="subtitle">
             <span class="line-badge">${favourite.lineName}</span>
-            ${favourite.directionLabel} · ${favourite.destinationName}
+            ${favourite.directionLabel}${destinationSuffix}
           </p>
         </div>
         <div class="card-actions">
@@ -167,46 +168,93 @@ async function handleStationSelected(station: Station): Promise<void> {
   }
 }
 
+function createRouteButton(
+  station: Station,
+  representative: Arrival,
+  label: string,
+  destinationName: string | undefined,
+  buttonHtml: string,
+  dashed: boolean
+): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = dashed ? 'result-btn result-btn--any' : 'result-btn';
+  btn.style.setProperty('--line-color', lineColor(representative.lineId));
+  btn.innerHTML = buttonHtml;
+  btn.addEventListener('click', () => {
+    const favourite: Favourite = {
+      id: favouriteId(station.id, representative.lineId, representative.direction, destinationName),
+      stopPointId: station.id,
+      stopName: station.name,
+      lineId: representative.lineId,
+      lineName: representative.lineName,
+      // TfL always returns 'inbound'/'outbound' here even though the schema types it as string
+      direction: representative.direction as GetTflArrivalsDirection,
+      destinationName,
+      directionLabel: label,
+    };
+    addFavourite(favourite);
+    dialog.close();
+    renderFavourites();
+  });
+  return btn;
+}
+
 function renderRouteResults(station: Station, arrivals: Arrival[]): void {
-  // Keyed by destination too, not just line+direction — branched lines (e.g. District line
-  // splitting into Wimbledon/Richmond/Ealing Broadway) share a lineId and direction, so without
-  // this only one branch would ever show up as a selectable option.
-  const seen = new Map<string, Arrival>();
+  // Group by line+direction+destination so branched lines (e.g. District line splitting into
+  // Wimbledon/Richmond/Ealing Broadway) offer every branch as its own option. Also grouped by
+  // line+direction alone, so directions with no real branching (e.g. Earl's Court eastbound,
+  // where the destination just varies by each train's terminus but every train takes the same
+  // route) can be selected without pinning to one arbitrary destination.
+  const byLineDirection = new Map<string, Arrival[]>();
   for (const arrival of arrivals) {
-    const key = `${arrival.lineId}:${arrival.direction}:${arrival.destinationName}`;
-    if (!seen.has(key)) seen.set(key, arrival);
+    const ldKey = `${arrival.lineId}:${arrival.direction}`;
+    const destinations = byLineDirection.get(ldKey);
+    if (destinations) {
+      if (!destinations.some((a) => a.destinationName === arrival.destinationName)) {
+        destinations.push(arrival);
+      }
+    } else {
+      byLineDirection.set(ldKey, [arrival]);
+    }
   }
 
   routeResultsEl.innerHTML = '';
 
-  if (seen.size === 0) {
+  if (byLineDirection.size === 0) {
     routeResultsEl.innerHTML = `<p class="empty">No live arrivals right now, try again later</p>`;
     return;
   }
 
-  for (const arrival of seen.values()) {
-    const label = directionLabelFor(arrival);
-    const btn = document.createElement('button');
-    btn.className = 'result-btn';
-    btn.style.setProperty('--line-color', lineColor(arrival.lineId));
-    btn.innerHTML = `<span class="line-badge" style="--line-color: ${lineColor(arrival.lineId)}; --line-text-color: ${lineTextColor(arrival.lineId)}">${arrival.lineName}</span> ${label} · ${arrival.destinationName}`;
-    btn.addEventListener('click', () => {
-      const favourite: Favourite = {
-        id: favouriteId(station.id, arrival.lineId, arrival.direction, arrival.destinationName),
-        stopPointId: station.id,
-        stopName: station.name,
-        lineId: arrival.lineId,
-        lineName: arrival.lineName,
-        // TfL always returns 'inbound'/'outbound' here even though the schema types it as string
-        direction: arrival.direction as GetTflArrivalsDirection,
-        destinationName: arrival.destinationName,
-        directionLabel: label,
-      };
-      addFavourite(favourite);
-      dialog.close();
-      renderFavourites();
-    });
-    routeResultsEl.appendChild(btn);
+  for (const destinations of byLineDirection.values()) {
+    const representative = destinations[0];
+    const label = directionLabelFor(representative);
+    const lineBadge = `<span class="line-badge" style="--line-color: ${lineColor(representative.lineId)}; --line-text-color: ${lineTextColor(representative.lineId)}">${representative.lineName}</span>`;
+
+    if (destinations.length > 1) {
+      routeResultsEl.appendChild(
+        createRouteButton(
+          station,
+          representative,
+          label,
+          undefined,
+          `${lineBadge} ${label} · Any destination`,
+          true
+        )
+      );
+    }
+
+    for (const arrival of destinations) {
+      routeResultsEl.appendChild(
+        createRouteButton(
+          station,
+          arrival,
+          label,
+          arrival.destinationName,
+          `${lineBadge} ${label} · ${arrival.destinationName}`,
+          false
+        )
+      );
+    }
   }
 }
 

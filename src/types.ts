@@ -15,7 +15,9 @@ export interface Favourite {
   lineId: string;
   lineName: string;
   direction: GetTflArrivalsDirection;
-  destinationName: string;
+  /** Undefined means "any destination on this line/direction" — e.g. Earl's Court eastbound
+   * has no real branching, so filtering to one specific terminus would hide valid trains. */
+  destinationName?: string;
   /** e.g. "Southbound" — derived from platformName, used for display instead of destination/inbound-outbound */
   directionLabel: string;
 }

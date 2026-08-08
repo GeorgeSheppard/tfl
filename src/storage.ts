@@ -6,9 +6,9 @@ export function favouriteId(
   stopPointId: string,
   lineId: string,
   direction: string,
-  destinationName: string
+  destinationName?: string
 ): string {
-  return `${stopPointId}:${lineId}:${direction}:${destinationName}`;
+  return `${stopPointId}:${lineId}:${direction}:${destinationName ?? '*'}`;
 }
 
 export function getFavourites(): Favourite[] {

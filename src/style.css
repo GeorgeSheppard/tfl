@@ -310,6 +310,11 @@ dialog h2 {
   border-color: var(--tfl-blue);
 }
 
+.result-btn--any {
+  border-style: dashed;
+  font-weight: 600;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
