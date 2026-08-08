@@ -21,4 +21,6 @@ export interface Favourite {
   lineName: string;
   direction: string;
   destinationName: string;
+  /** e.g. "Southbound" — derived from platformName, used for display instead of destination/inbound-outbound */
+  directionLabel: string;
 }

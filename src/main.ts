@@ -16,6 +16,13 @@ function formatEta(seconds: number): string {
   return `${Math.round(seconds / 60)} min`;
 }
 
+const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
+
+function directionLabelFor(arrival: Arrival): string {
+  const compass = COMPASS_DIRECTIONS.find((d) => arrival.platformName.includes(d));
+  return compass ?? `towards ${arrival.destinationName}`;
+}
+
 function renderFavourites(): void {
   const favourites = getFavourites();
   favouritesEl.innerHTML = '';
@@ -33,7 +40,7 @@ function renderFavourites(): void {
       <div class="card-header">
         <div>
           <h2>${favourite.stopName}</h2>
-          <p class="subtitle">${favourite.lineName} — towards ${favourite.destinationName}</p>
+          <p class="subtitle">${favourite.lineName} — ${favourite.directionLabel}</p>
         </div>
         <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
       </div>
@@ -143,9 +150,10 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
   }
 
   for (const arrival of seen.values()) {
+    const label = directionLabelFor(arrival);
     const btn = document.createElement('button');
     btn.className = 'result-btn';
-    btn.textContent = `${arrival.lineName} — towards ${arrival.destinationName}`;
+    btn.textContent = `${arrival.lineName} — ${label}`;
     btn.addEventListener('click', () => {
       const favourite: Favourite = {
         id: favouriteId(station.id, arrival.lineId, arrival.direction),
@@ -155,6 +163,7 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
         lineName: arrival.lineName,
         direction: arrival.direction,
         destinationName: arrival.destinationName,
+        directionLabel: label,
       };
       addFavourite(favourite);
       dialog.close();
