@@ -1,6 +1,7 @@
 import './style.css';
 import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
+import { GetTflArrivalsDirection } from './api/generated';
 import { Arrival, Favourite, Station } from './types';
 
 const favouritesEl = document.querySelector<HTMLDivElement>('#favourites')!;
@@ -184,7 +185,8 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
         stopName: station.name,
         lineId: arrival.lineId,
         lineName: arrival.lineName,
-        direction: arrival.direction,
+        // TfL always returns 'inbound'/'outbound' here even though the schema types it as string
+        direction: arrival.direction as GetTflArrivalsDirection,
         destinationName: arrival.destinationName,
         directionLabel: label,
       };

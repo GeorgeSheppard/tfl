@@ -1,18 +1,12 @@
-export interface Station {
-  id: string;
-  name: string;
-}
+import {
+  GetTflArrivals200ArrivalsItem,
+  GetTflArrivalsDirection,
+  GetTflStations200StationsItem,
+} from './api/generated';
 
-export interface Arrival {
-  lineId: string;
-  lineName: string;
-  platformName: string;
-  direction: string;
-  destinationName: string;
-  timeToStationSeconds: number;
-  expectedArrival: string;
-  currentLocation: string;
-}
+// Types are generated from the backend's OpenAPI schema — see orval.config.ts.
+export type Station = GetTflStations200StationsItem;
+export type Arrival = GetTflArrivals200ArrivalsItem;
 
 export interface Favourite {
   id: string;
@@ -20,7 +14,7 @@ export interface Favourite {
   stopName: string;
   lineId: string;
   lineName: string;
-  direction: string;
+  direction: GetTflArrivalsDirection;
   destinationName: string;
   /** e.g. "Southbound" — derived from platformName, used for display instead of destination/inbound-outbound */
   directionLabel: string;
