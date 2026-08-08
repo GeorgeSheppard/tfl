@@ -4,6 +4,7 @@
   "description": "Next tube times for your favourite station/line/direction combos",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
   "scripts": {
     "dev": "vite",
     "fetch:schema": "curl -o openapi.json https://raw.githubusercontent.com/GeorgeSheppard/api.georgesheppard.dev/master/generated/openapi/georgesheppard-spec.json",
