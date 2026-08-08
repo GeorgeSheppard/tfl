@@ -18,11 +18,25 @@ function formatEta(seconds: number): string {
   return `${Math.round(seconds / 60)} min`;
 }
 
+const DESTINATION_SUFFIXES = [
+  ' Underground Station',
+  ' DLR Station',
+  ' Rail Station',
+  ' Station',
+];
+
+// TfL's destinationName is the full official station name (e.g. "Wimbledon Underground
+// Station") — display-only cleanup, the raw value is still what's stored/filtered on.
+function cleanDestinationLabel(destinationName: string): string {
+  const suffix = DESTINATION_SUFFIXES.find((s) => destinationName.endsWith(s));
+  return suffix ? destinationName.slice(0, -suffix.length) : destinationName;
+}
+
 const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
 
 function directionLabelFor(arrival: Arrival): string {
   const compass = COMPASS_DIRECTIONS.find((d) => arrival.platformName.includes(d));
-  return compass ?? `towards ${arrival.destinationName}`;
+  return compass ?? `towards ${cleanDestinationLabel(arrival.destinationName)}`;
 }
 
 function renderFavourites(): void {
@@ -40,7 +54,9 @@ function renderFavourites(): void {
     card.dataset.id = favourite.id;
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
-    const destinationSuffix = favourite.destinationName ? ` · ${favourite.destinationName}` : '';
+    const destinationSuffix = favourite.destinationName
+      ? ` · ${cleanDestinationLabel(favourite.destinationName)}`
+      : '';
     card.innerHTML = `
       <div class="card-header">
         <div>
@@ -99,7 +115,7 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
       .map(
         (arrival) => `
           <div class="arrival">
-            <span class="arrival-destination">${arrival.destinationName}</span>
+            <span class="arrival-destination">${cleanDestinationLabel(arrival.destinationName)}</span>
             <span class="arrival-location">${arrival.currentLocation}</span>
             <span class="arrival-time">${formatEta(arrival.timeToStationSeconds)}</span>
           </div>
@@ -230,18 +246,21 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
     const label = directionLabelFor(representative);
     const lineBadge = `<span class="line-badge" style="--line-color: ${lineColor(representative.lineId)}; --line-text-color: ${lineTextColor(representative.lineId)}">${representative.lineName}</span>`;
 
-    if (destinations.length > 1) {
-      routeResultsEl.appendChild(
-        createRouteButton(
-          station,
-          representative,
-          label,
-          undefined,
-          `${lineBadge} ${label} · Any destination`,
-          true
-        )
-      );
-    }
+    // Always offered, not just when this particular live snapshot happens to contain more than
+    // one destination — which destinations are actually running right now is down to luck of
+    // timing (e.g. a station's eastbound service might only show one terminus for a while even
+    // though it genuinely varies over the day), so "any destination" needs to be reliably
+    // available rather than conditional on what's live at the moment you add the favourite.
+    routeResultsEl.appendChild(
+      createRouteButton(
+        station,
+        representative,
+        label,
+        undefined,
+        `${lineBadge} ${label} · Any destination`,
+        true
+      )
+    );
 
     for (const arrival of destinations) {
       routeResultsEl.appendChild(
@@ -250,7 +269,7 @@ function renderRouteResults(station: Station, arrivals: Arrival[]): void {
           arrival,
           label,
           arrival.destinationName,
-          `${lineBadge} ${label} · ${arrival.destinationName}`,
+          `${lineBadge} ${label} · ${cleanDestinationLabel(arrival.destinationName)}`,
           false
         )
       );
