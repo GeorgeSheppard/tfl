@@ -1,0 +1,18 @@
+{
+  "name": "tfl",
+  "version": "1.0.0",
+  "description": "Next tube times for your favourite station/line/direction combos",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^7.1.5",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}

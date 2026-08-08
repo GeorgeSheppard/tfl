@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0e14" />
+    <title>Tube Times</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>🚇 Tube Times</h1>
+        <button id="add-btn">+ Add</button>
+      </header>
+      <div id="favourites"></div>
+    </div>
+
+    <dialog id="add-dialog">
+      <h2>Add a station</h2>
+      <input
+        id="station-search"
+        type="search"
+        placeholder="Search station name…"
+        autocomplete="off"
+      />
+      <div id="station-results" class="result-list"></div>
+      <div id="route-results" class="result-list"></div>
+      <div class="dialog-actions">
+        <button id="cancel-add" type="button">Cancel</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
