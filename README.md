@@ -8,10 +8,9 @@ underground before you lose signal.
 - `vite-plugin-singlefile` inlines all CSS and JS into a single `index.html` at build time,
   so the whole app loads in one HTTP request.
 - Favourite stations are stored in `localStorage` — no login, no backend state.
-- The loading state is a pixel-art S Stock train (`src/train-loader.ts`), rasterised pixel by
-  pixel onto a 96×62 canvas rather than shipped as an image — `viteSingleFile` base64-inlines
-  every asset, so a sprite sheet would land in the same single request. It adds 2.6KB gzipped,
-  less than one PNG frame, and stays sharp at any size.
+- The loading state is a pixel-art S Stock train (`src/train-loader.ts`) that animates without
+  moving a single pixel — see [The loading state](#the-loading-state). It adds 3.4KB gzipped and
+  makes no image request at all.
 - Live arrival data is proxied through `api.georgesheppard.dev` (see the `/tfl/*` endpoints
   in the `api.georgesheppard.dev` repo), which holds the TfL API key.
 - The API client is generated from the backend's OpenAPI schema with
@@ -53,3 +52,37 @@ pnpm build
 ```
 
 Outputs a single self-contained `dist/index.html`.
+
+## The loading state
+
+`art/district-train.png` holds the train and the track as two separate drawings.
+`scripts/build-train-sprite.mjs` turns them into `src/train-sprite.ts`:
+
+```bash
+node scripts/build-train-sprite.mjs
+```
+
+The source is a render *of* pixel art rather than true pixel art — its cells are ~10px and don't
+land on a whole-pixel grid — so it can't be nearest-neighbour downscaled. The script walks the
+artist's grid taking the median of each cell's central half (cell edges are antialiased and drag
+the colour), quantises to the tones actually used, and floods the white background away. It emits
+a palette plus one character per pixel, which decodes synchronously — no image request, no blank
+first frame — and gzips to about half what an inlined base64 PNG would, since base64 defeats
+deflate while a run-heavy index string plays straight into it.
+
+The animation moves nothing. Every pixel stays where the artist put it and only changes brightness,
+which is how arcade racers faked a rushing road: keep the vehicle still, cycle the colours of the
+stripes underneath it, and the eye supplies the motion. The sleepers light in sequence toward the
+viewer, the ballast and rails shimmer at a fifth of that amplitude so the ties read as the thing
+streaming past, and the train bobs a single pixel.
+
+Two details carry the whole effect, and both are measured from the art rather than guessed:
+
+- **Which way the track runs**, found by the x-shift that best aligns each row of the strip with
+  the next. Reading it off the strip's ragged ends gives a badly wrong answer.
+- **Which pixels belong to which sleeper**, so the ties can be lit by rank. Perspective packs them
+  closer toward the far end, so lighting by a fixed wavelength beats against them and shimmers
+  instead of marching.
+
+The eight frames are precomputed at module load into one buffer each, so a repaint is a buffer
+copy, and a single `requestAnimationFrame` drives every loader on the page.
