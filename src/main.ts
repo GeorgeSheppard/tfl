@@ -23,8 +23,12 @@ const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected
 const stepBackBtn = document.querySelector<HTMLButtonElement>('#step-back-btn')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
 
+// TfL reports a specific platform for locations all along the route (e.g. "Approaching Bayswater
+// Platform 1"), not just for the station being queried — so "ends with Platform N" is not enough
+// to mean "here, now". The unambiguous signal is "At Platform" with no station name: TfL omits
+// the name because it's the queried station itself.
 function isTrainAtPlatform(location: string): boolean {
-  return /\bPlatform\s*\d*\s*$/i.test(location);
+  return /^At\s+Platform\s*\d*\s*$/i.test(location.trim());
 }
 
 function formatEta(seconds: number, location?: string): string {
@@ -84,9 +88,49 @@ function startAutoRefresh(): void {
   }, 15000);
 }
 
+function createFavouriteCard(favourite: Favourite): HTMLElement {
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.id = favourite.id;
+  card.dataset.loaded = 'false';
+  card.style.setProperty('--line-color', lineColor(favourite.lineId));
+  card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
+  card.innerHTML = `
+    <div class="card-header">
+      <div>
+        <h2>${favourite.stopName}</h2>
+        <p class="subtitle">
+          <span class="line-badge">${favourite.lineName}</span>
+          ${favourite.directionLabel}
+        </p>
+      </div>
+      <div class="card-actions">
+        <button class="refresh-btn" aria-label="Refresh ${favourite.stopName}">↻</button>
+        <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
+      </div>
+    </div>
+    <div class="times">
+      <span class="loading">Loading…</span>
+    </div>
+  `;
+
+  card.querySelector('.remove-btn')!.addEventListener('click', () => {
+    removeFavourite(favourite.id);
+    renderFavourites();
+  });
+
+  card.querySelector('.refresh-btn')!.addEventListener('click', () => {
+    loadArrivalsForCard(card, favourite);
+  });
+
+  return card;
+}
+
+// Syncs the card list to the current favourites without touching cards that already exist —
+// recreating every card on each add/remove would restart their "Loading…" state and refetch
+// arrivals for stations that hadn't changed.
 function renderFavourites(): void {
   const favourites = getFavourites();
-  favouritesEl.innerHTML = '';
 
   if (favourites.length === 0) {
     favouritesEl.innerHTML = `<p class="empty">No stations yet. Tap "+ Add" to add your first one.</p>`;
@@ -98,42 +142,17 @@ function renderFavourites(): void {
     return;
   }
 
+  if (favouritesEl.querySelector('.empty')) favouritesEl.innerHTML = '';
+
+  const favouriteIds = new Set(favourites.map((f) => f.id));
+  for (const card of Array.from(favouritesEl.querySelectorAll<HTMLElement>('.card'))) {
+    if (!favouriteIds.has(card.dataset.id!)) card.remove();
+  }
+
   for (const favourite of favourites) {
-    const card = document.createElement('article');
-    card.className = 'card';
-    card.dataset.id = favourite.id;
-    card.dataset.loaded = 'false';
-    card.style.setProperty('--line-color', lineColor(favourite.lineId));
-    card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
-    card.innerHTML = `
-      <div class="card-header">
-        <div>
-          <h2>${favourite.stopName}</h2>
-          <p class="subtitle">
-            <span class="line-badge">${favourite.lineName}</span>
-            ${favourite.directionLabel}
-          </p>
-        </div>
-        <div class="card-actions">
-          <button class="refresh-btn" aria-label="Refresh ${favourite.stopName}">↻</button>
-          <button class="remove-btn" aria-label="Remove ${favourite.stopName}">✕</button>
-        </div>
-      </div>
-      <div class="times">
-        <span class="loading">Loading…</span>
-      </div>
-    `;
+    if (favouritesEl.querySelector(`[data-id="${favourite.id}"]`)) continue;
+    const card = createFavouriteCard(favourite);
     favouritesEl.appendChild(card);
-
-    card.querySelector('.remove-btn')!.addEventListener('click', () => {
-      removeFavourite(favourite.id);
-      renderFavourites();
-    });
-
-    card.querySelector('.refresh-btn')!.addEventListener('click', () => {
-      loadArrivalsForCard(card, favourite);
-    });
-
     loadArrivalsForCard(card, favourite);
   }
 
