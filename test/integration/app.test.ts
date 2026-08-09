@@ -19,15 +19,13 @@ afterEach(() => {
 });
 
 describe('a station already selected', () => {
-  it('renders the saved card with its line/direction and next arrivals', async () => {
+  it('renders the saved card with its line and next arrivals', async () => {
     const favourite: Favourite = {
-      id: '940GZZLUVIC:victoria:inbound',
+      id: '940GZZLUVIC:victoria',
       stopPointId: '940GZZLUVIC',
       stopName: 'Victoria Underground Station',
       lineId: 'victoria',
       lineName: 'Victoria',
-      direction: 'inbound',
-      directionLabel: 'Northbound',
     };
     localStorage.setItem(FAVOURITES_KEY, JSON.stringify([favourite]));
 
@@ -51,32 +49,56 @@ describe('a station already selected', () => {
     const card = document.querySelector('#favourites .card');
     expect(card).not.toBeNull();
     expect(card!.querySelector('h2')!.textContent).toBe('Victoria Underground Station');
-    expect(card!.querySelector('.subtitle')!.textContent).toContain('Northbound');
+    expect(card!.querySelector('.subtitle')!.textContent).toContain('Victoria');
     expect(card!.querySelector('.arrival-destination')!.textContent).toBe('Walthamstow Central');
     expect(card!.querySelector('.arrival-time')!.textContent).toBe('2 min');
   });
 });
 
 describe('adding a station from a blank slate', () => {
-  it('shows direction options after picking a station and adds it to favourites', async () => {
+  it('subscribes directly when the station has only one line', async () => {
+    const station: Station = {
+      id: '940GZZLUVIC',
+      name: 'Victoria Underground Station',
+      lines: [{ lineId: 'victoria', lineName: 'Victoria' }],
+    };
+    mockFetchResponses({
+      '/tfl/stations': { stations: [station] },
+      '/tfl/arrivals': { arrivals: [] },
+    });
+
+    await import('../../src/main');
+    await flushAsync();
+
+    document.querySelector<HTMLButtonElement>('#add-btn')!.click();
+
+    const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
+    searchInput.value = 'Victoria';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(300); // search is debounced
+
+    const stationResult = document.querySelector<HTMLButtonElement>('#station-results .result-btn');
+    expect(stationResult).not.toBeNull();
+    stationResult!.click();
+    await flushAsync();
+
+    // Only one line — no line-picking step, added straight away.
+    const dialog = document.querySelector<HTMLDialogElement>('#add-dialog')!;
+    expect(dialog.open).toBe(false);
+
+    const card = document.querySelector('#favourites .card');
+    expect(card).not.toBeNull();
+    expect(card!.querySelector('h2')!.textContent).toBe('Victoria Underground Station');
+    expect(card!.querySelector('.subtitle')!.textContent).toContain('Victoria');
+  });
+
+  it('shows line options when the station is served by more than one line', async () => {
     const station: Station = {
       id: '940GZZLUOXC',
       name: 'Oxford Circus Underground Station',
       lines: [
-        {
-          lineId: 'victoria',
-          lineName: 'Victoria',
-          direction: 'inbound',
-          towards: ['Walthamstow Central Underground Station'],
-          compass: 'Northbound',
-        },
-        {
-          lineId: 'victoria',
-          lineName: 'Victoria',
-          direction: 'outbound',
-          towards: ['Brixton Underground Station'],
-          compass: 'Southbound',
-        },
+        { lineId: 'victoria', lineName: 'Victoria' },
+        { lineId: 'bakerloo', lineName: 'Bakerloo' },
       ],
     };
     mockFetchResponses({
@@ -98,15 +120,12 @@ describe('adding a station from a blank slate', () => {
     expect(stationResult).not.toBeNull();
     stationResult!.click();
 
-    // Regression check: this station has one line with two directions, so selecting it should
-    // go straight to the direction step and those options must still be there afterwards —
-    // they were previously rendered then immediately wiped.
-    const directionButtons = document.querySelectorAll<HTMLButtonElement>('#step-results .result-btn');
-    expect(directionButtons.length).toBe(2);
-    expect(directionButtons[0].textContent).toContain('Northbound');
-    expect(directionButtons[1].textContent).toContain('Southbound');
+    const lineButtons = document.querySelectorAll<HTMLButtonElement>('#step-results .result-btn');
+    expect(lineButtons.length).toBe(2);
+    expect(lineButtons[0].textContent).toContain('Victoria');
+    expect(lineButtons[1].textContent).toContain('Bakerloo');
 
-    directionButtons[0].click();
+    lineButtons[0].click();
     await flushAsync();
 
     const dialog = document.querySelector<HTMLDialogElement>('#add-dialog')!;
@@ -115,6 +134,6 @@ describe('adding a station from a blank slate', () => {
     const card = document.querySelector('#favourites .card');
     expect(card).not.toBeNull();
     expect(card!.querySelector('h2')!.textContent).toBe('Oxford Circus Underground Station');
-    expect(card!.querySelector('.subtitle')!.textContent).toContain('Northbound');
+    expect(card!.querySelector('.subtitle')!.textContent).toContain('Victoria');
   });
 });

@@ -1,7 +1,6 @@
 import './style.css';
 import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
-import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
 import { Arrival, Favourite, Station } from './types';
 
@@ -20,7 +19,6 @@ const stationResultsEl = document.querySelector<HTMLDivElement>('#station-result
 const routePickerEl = document.querySelector<HTMLDivElement>('#route-picker')!;
 const changeStationBtn = document.querySelector<HTMLButtonElement>('#change-station-btn')!;
 const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected-station-name')!;
-const stepBackBtn = document.querySelector<HTMLButtonElement>('#step-back-btn')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
 
 // TfL reports a specific platform for locations all along the route (e.g. "Approaching Bayswater
@@ -101,7 +99,6 @@ function createFavouriteCard(favourite: Favourite): HTMLElement {
         <h2>${favourite.stopName}</h2>
         <p class="subtitle">
           <span class="line-badge">${favourite.lineName}</span>
-          ${favourite.directionLabel}
         </p>
       </div>
       <div class="card-actions">
@@ -236,7 +233,6 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   try {
     const arrivals = await getArrivals(favourite.stopPointId, {
       lineId: favourite.lineId,
-      direction: favourite.direction,
       limit: ARRIVALS_WINDOW,
       signal: controller.signal,
     });
@@ -269,23 +265,11 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
 
 // --- Add-station dialog -----------------------------------------------------------------------
 
-interface RouteOption {
-  lineId: string;
-  lineName: string;
-  direction: GetTflArrivalsDirection;
-  directionLabel: string;
-}
-
-let currentStation: Station | undefined;
-let routeOptions: RouteOption[] = [];
-
 let searchDebounce: number | undefined;
 
 function openAddDialog(): void {
   searchInput.value = '';
   stationResultsEl.innerHTML = '';
-  currentStation = undefined;
-  routeOptions = [];
   stationPickerEl.classList.remove('hidden');
   routePickerEl.classList.add('hidden');
   dialog.showModal();
@@ -329,123 +313,47 @@ function renderStationResults(stations: Station[]): void {
   }
 }
 
-// "inbound"/"outbound" is just TfL's internal routing convention — meaningless to a rider picking
-// a direction. What matches the tube map and platform signage is the compass direction
-// (Northbound/Southbound/etc), so prefer that when the backend found one. It isn't always
-// available (best-effort, derived from live data at cache-build time), so fall back to the
-// destination(s) this direction actually goes towards — a line that forks past this station has
-// more than one.
-function directionLabelFor(compass: string | undefined, towards: string[]): string {
-  if (compass) return compass;
-  return `towards ${towards.map(cleanDestinationLabel).join(' / ')}`;
-}
-
 function handleStationSelected(station: Station): void {
-  currentStation = station;
   selectedStationNameEl.textContent = station.name;
   stationPickerEl.classList.add('hidden');
   routePickerEl.classList.remove('hidden');
 
-  hideStepBack();
-
-  // Convert pre-computed lines data to route options
   const lines = station.lines ?? [];
-  routeOptions = lines.map((line) => ({
-    lineId: line.lineId,
-    lineName: line.lineName,
-    direction: line.direction as GetTflArrivalsDirection,
-    directionLabel: directionLabelFor(line.compass, line.towards),
-  }));
 
-  if (routeOptions.length === 0) {
+  if (lines.length === 0) {
     stepResultsEl.innerHTML = `<p class="empty">No lines available for this station</p>`;
     return;
   }
 
-  const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
-  if (distinctLineIds.size === 1) {
-    // Nothing to pick between — skip straight to the direction step.
-    showDirections(routeOptions[0].lineId, undefined);
-  } else {
-    showLines();
-  }
-}
-
-function showStepBack(label: string, onClick: () => void): void {
-  stepBackBtn.textContent = label;
-  stepBackBtn.onclick = onClick;
-  stepBackBtn.classList.remove('hidden');
-}
-
-function hideStepBack(): void {
-  stepBackBtn.onclick = null;
-  stepBackBtn.classList.add('hidden');
-}
-
-function showLines(): void {
-  hideStepBack();
-  stepResultsEl.innerHTML = '';
-
-  const seenLines = new Map<string, RouteOption>();
-  for (const option of routeOptions) {
-    if (!seenLines.has(option.lineId)) seenLines.set(option.lineId, option);
-  }
-
-  for (const option of seenLines.values()) {
-    const btn = document.createElement('button');
-    btn.className = 'result-btn';
-    btn.style.setProperty('--line-color', lineColor(option.lineId));
-    btn.innerHTML = lineBadgeHtml(option.lineId, option.lineName);
-    btn.addEventListener('click', () => showDirections(option.lineId, showLines));
-    stepResultsEl.appendChild(btn);
-  }
-}
-
-// onBack is undefined when there was nothing to pick before this step (single line overall) —
-// in that case there's nowhere meaningful to go back to except the station search.
-function showDirections(lineId: string, onBack: (() => void) | undefined): void {
-  if (!currentStation) return;
-  const station = currentStation;
-
-  const lineOptions = routeOptions.filter((o) => o.lineId === lineId);
-  if (lineOptions.length === 0) return;
-
-  if (lineOptions.length === 1) {
-    // Only one direction actually running at this station for this line — nothing left to
-    // choose, add it directly.
-    addFavouriteAndClose(station, lineOptions[0]);
+  if (lines.length === 1) {
+    // Nothing to pick between — subscribe to it directly.
+    addFavouriteAndClose(station, lines[0]);
     return;
   }
 
-  if (onBack) showStepBack('← All lines', onBack);
-  else hideStepBack();
-
   stepResultsEl.innerHTML = '';
-  for (const option of lineOptions) {
-    const lineBadge = lineBadgeHtml(option.lineId, option.lineName);
+  for (const line of lines) {
     const btn = document.createElement('button');
     btn.className = 'result-btn';
-    btn.style.setProperty('--line-color', lineColor(option.lineId));
-    btn.innerHTML = `${lineBadge} ${option.directionLabel}`;
-    btn.addEventListener('click', () => addFavouriteAndClose(station, option));
+    btn.style.setProperty('--line-color', lineColor(line.lineId));
+    btn.innerHTML = lineBadgeHtml(line.lineId, line.lineName);
+    btn.addEventListener('click', () => addFavouriteAndClose(station, line));
     stepResultsEl.appendChild(btn);
   }
 }
 
-function buildFavourite(station: Station, option: RouteOption): Favourite {
+function buildFavourite(station: Station, line: { lineId: string; lineName: string }): Favourite {
   return {
-    id: favouriteId(station.id, option.lineId, option.direction),
+    id: favouriteId(station.id, line.lineId),
     stopPointId: station.id,
     stopName: station.name,
-    lineId: option.lineId,
-    lineName: option.lineName,
-    direction: option.direction,
-    directionLabel: option.directionLabel,
+    lineId: line.lineId,
+    lineName: line.lineName,
   };
 }
 
-function addFavouriteAndClose(station: Station, option: RouteOption): void {
-  addFavourite(buildFavourite(station, option));
+function addFavouriteAndClose(station: Station, line: { lineId: string; lineName: string }): void {
+  addFavourite(buildFavourite(station, line));
   dialog.close();
   renderFavourites();
 }
