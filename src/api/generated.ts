@@ -587,28 +587,6 @@ export type GetTflArrivals500 = {
   error: string;
 };
 
-export type GetTflStationLines200StationsItemLinesItem = {
-  /** TfL Line ID */
-  lineId: string;
-  /** Line name (e.g., Central, Circle) */
-  lineName: string;
-  /** Direction (e.g., Inbound, Outbound, Northbound) */
-  direction: string;
-};
-
-export type GetTflStationLines200StationsItem = {
-  /** TfL StopPoint ID */
-  stationId: string;
-  /** Station name */
-  stationName: string;
-  /** Available lines and directions at this station */
-  lines: GetTflStationLines200StationsItemLinesItem[];
-};
-
-export type GetTflStationLines200 = {
-  stations: GetTflStationLines200StationsItem[];
-};
-
 export const getGetAuthLoginUrl = (params?: GetAuthLoginParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -1192,30 +1170,6 @@ export const getGetTflArrivalsUrl = (params: GetTflArrivalsParams,) => {
 export const getTflArrivals = async (params: GetTflArrivalsParams, options?: Parameters<typeof customFetch>[1]): Promise<GetTflArrivals200> => {
 
   return customFetch<GetTflArrivals200>(getGetTflArrivalsUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export const getGetTflStationLinesUrl = () => {
-
-
-
-
-  return `/tfl/station-lines`
-}
-
-/**
- * Get pre-computed station lines and directions data for all tube stations
- */
-export const getTflStationLines = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetTflStationLines200> => {
-
-  return customFetch<GetTflStationLines200>(getGetTflStationLinesUrl(),
   {
     ...options,
     method: 'GET'
