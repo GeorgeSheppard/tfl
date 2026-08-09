@@ -516,6 +516,8 @@ export type GetTflStations200StationsItemLinesItem = {
   direction: string;
   /** Terminus station name(s) reached by travelling this direction from here — more than one means the line forks past this station */
   towards: string[];
+  /** Compass direction as shown on platform signage/tube maps (e.g. "Northbound") — best-effort, not always available */
+  compass?: string;
 };
 
 export type GetTflStations200StationsItem = {

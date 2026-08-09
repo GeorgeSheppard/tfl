@@ -311,10 +311,13 @@ function renderStationResults(stations: Station[]): void {
 }
 
 // "inbound"/"outbound" is just TfL's internal routing convention — meaningless to a rider picking
-// a direction. What tells them something useful is where the train actually ends up, so label
-// each direction with its real terminus/termini instead (e.g. "towards Ealing Broadway"). A line
-// that forks past this station has more than one.
-function directionLabelFor(towards: string[]): string {
+// a direction. What matches the tube map and platform signage is the compass direction
+// (Northbound/Southbound/etc), so prefer that when the backend found one. It isn't always
+// available (best-effort, derived from live data at cache-build time), so fall back to the
+// destination(s) this direction actually goes towards — a line that forks past this station has
+// more than one.
+function directionLabelFor(compass: string | undefined, towards: string[]): string {
+  if (compass) return compass;
   return `towards ${towards.map(cleanDestinationLabel).join(' / ')}`;
 }
 
@@ -332,7 +335,7 @@ function handleStationSelected(station: Station): void {
     lineId: line.lineId,
     lineName: line.lineName,
     direction: line.direction as GetTflArrivalsDirection,
-    directionLabel: directionLabelFor(line.towards),
+    directionLabel: directionLabelFor(line.compass, line.towards),
   }));
 
   if (routeOptions.length === 0) {
