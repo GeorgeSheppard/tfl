@@ -1,5 +1,5 @@
 import './style.css';
-import { getArrivals, getStationLines, searchStations } from './api';
+import { getArrivals, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
 import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
@@ -259,7 +259,6 @@ interface RouteOption {
 
 let currentStation: Station | undefined;
 let routeOptions: RouteOption[] = [];
-let stationLinesMap: Map<string, RouteOption[]> = new Map();
 
 let searchDebounce: number | undefined;
 
@@ -311,7 +310,7 @@ function renderStationResults(stations: Station[]): void {
   }
 }
 
-async function handleStationSelected(station: Station): Promise<void> {
+function handleStationSelected(station: Station): void {
   currentStation = station;
   selectedStationNameEl.textContent = station.name;
   stationPickerEl.classList.add('hidden');
@@ -319,8 +318,14 @@ async function handleStationSelected(station: Station): Promise<void> {
 
   hideStepBack();
 
-  // Use pre-computed station lines data instead of fetching live arrivals
-  routeOptions = stationLinesMap.get(station.id) ?? [];
+  // Convert pre-computed lines data to route options
+  const lines = (station.lines ?? []) as Array<{ lineId: string; lineName: string; direction: string }>;
+  routeOptions = lines.map((line) => ({
+    lineId: line.lineId,
+    lineName: line.lineName,
+    direction: line.direction as GetTflArrivalsDirection,
+    directionLabel: line.direction,
+  }));
 
   if (routeOptions.length === 0) {
     stepResultsEl.innerHTML = `<p class="empty">No lines available for this station</p>`;
@@ -425,23 +430,5 @@ searchInput.addEventListener('input', () => {
   window.clearTimeout(searchDebounce);
   searchDebounce = window.setTimeout(handleStationSearch, 300);
 });
-
-// Load pre-computed station lines data on page load
-getStationLines()
-  .then((stations) => {
-    // Build a map of station ID -> route options for instant lookups
-    for (const station of stations) {
-      const options: RouteOption[] = station.lines.map((line) => ({
-        lineId: line.lineId,
-        lineName: line.lineName,
-        direction: line.direction as GetTflArrivalsDirection,
-        directionLabel: line.direction,
-      }));
-      stationLinesMap.set(station.stationId, options);
-    }
-  })
-  .catch((error) => {
-    console.error('Failed to load station lines:', error);
-  });
 
 renderFavourites();
