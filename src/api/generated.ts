@@ -512,8 +512,10 @@ export type GetTflStations200StationsItemLinesItem = {
   lineId: string;
   /** Line name */
   lineName: string;
-  /** Direction (inbound or outbound) */
+  /** Direction (inbound or outbound) — required by the arrivals API */
   direction: string;
+  /** Terminus station name(s) reached by travelling this direction from here — more than one means the line forks past this station */
+  towards: string[];
 };
 
 export type GetTflStations200StationsItem = {
