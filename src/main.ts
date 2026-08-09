@@ -329,7 +329,8 @@ async function handleStationSelected(station: Station): Promise<void> {
   try {
     // High limit here — this is a live snapshot used only to discover which lines/directions
     // are currently running at this station, not the arrivals themselves.
-    const arrivals = await getArrivals(station.id, { limit: 50 });
+    // Use 200 to handle busy stations with many lines/directions (e.g. Victoria, King's Cross).
+    const arrivals = await getArrivals(station.id, { limit: 200 });
     const byLineDirection = new Map<string, RouteOption>();
     for (const arrival of arrivals) {
       const key = `${arrival.lineId}:${arrival.direction}`;
@@ -356,7 +357,7 @@ async function handleStationSelected(station: Station): Promise<void> {
     } else {
       showLines();
     }
-  } catch {
+  } catch (error) {
     stepResultsEl.innerHTML = `<p class="error">Couldn't load lines for this station</p>`;
   }
 }
