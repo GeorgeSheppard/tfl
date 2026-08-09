@@ -345,6 +345,37 @@ dialog h2 {
   margin-top: 0.75rem;
 }
 
+/* Below the container's own max-width, the side padding just wastes screen space — go edge to
+ * edge like a native transport app, keeping only the line-colour accent and a divider between
+ * cards instead of a rounded, margined card per station. */
+@media (max-width: 480px) {
+  #app {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  header {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  #favourites {
+    gap: 0;
+  }
+
+  .card {
+    border-right: none;
+    border-radius: 0;
+    box-shadow: none;
+    border-top: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card:first-child {
+    border-top: 1px solid var(--border);
+  }
+}
+
 #cancel-add {
   background: transparent;
   border: 1px solid var(--border);
