@@ -350,8 +350,6 @@ function handleStationSelected(station: Station): void {
   } else {
     showLines();
   }
-
-  stepResultsEl.innerHTML = '';
 }
 
 function showStepBack(label: string, onClick: () => void): void {
