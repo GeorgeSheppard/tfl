@@ -1,4 +1,4 @@
-import { GetTflArrivalsDirection, getTflArrivals, getTflStations } from './api/generated';
+import { getTflArrivals, getTflStations } from './api/generated';
 import { Arrival, Station } from './types';
 
 export async function searchStations(query: string): Promise<Station[]> {
@@ -10,7 +10,6 @@ export async function getArrivals(
   stopPointId: string,
   options: {
     lineId?: string;
-    direction?: GetTflArrivalsDirection;
     limit?: number;
     signal?: AbortSignal;
   } = {}
