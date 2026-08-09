@@ -12,8 +12,10 @@ export async function getArrivals(
     lineId?: string;
     direction?: GetTflArrivalsDirection;
     limit?: number;
+    signal?: AbortSignal;
   } = {}
 ): Promise<Arrival[]> {
-  const { arrivals } = await getTflArrivals({ stopPointId, ...options });
+  const { signal, ...params } = options;
+  const { arrivals } = await getTflArrivals({ stopPointId, ...params }, { signal });
   return arrivals;
 }
