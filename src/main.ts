@@ -23,7 +23,13 @@ const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected
 const stepBackBtn = document.querySelector<HTMLButtonElement>('#step-back-btn')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
 
-function formatEta(seconds: number): string {
+function isTrainAtPlatform(location: string): boolean {
+  return /\bPlatform\s*\d*\s*$/i.test(location);
+}
+
+function formatEta(seconds: number, location?: string): string {
+  // If train is at platform, show "Now" regardless of timeToStationSeconds
+  if (location && isTrainAtPlatform(location)) return 'Now';
   if (seconds < 30) return 'Due';
   return `${Math.round(seconds / 60)} min`;
 }
@@ -173,7 +179,7 @@ function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
 
 // e.g. [Due, 300, 1140] -> "Due, 5, 19 min" — one shared "min" suffix instead of repeating it.
 function formatEtaList(arrivals: Arrival[]): string {
-  const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds));
+  const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds, a.currentLocation));
   return labels.map((label, i) => (i === labels.length - 1 ? label : label.replace(' min', ''))).join(', ');
 }
 
