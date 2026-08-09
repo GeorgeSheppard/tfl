@@ -1,118 +1,16 @@
 /*
- * The loading state: the District line S Stock train from art/district-train.png.
+ * The card loading state: the District line train painted to a canvas, frame by frame.
  *
- * Every pixel is the artist's and stays exactly where they put it. Nothing translates, nothing is
- * redrawn — the pixels just take a different tone each frame. That is how arcade racers faked a
- * rushing road: keep the vehicle still, cycle the colours of the stripes underneath it, and the
- * eye supplies the motion.
+ * The frames themselves live in train-frames.ts, shared with the GIF build. This file is only the
+ * DOM side of it — the canvas, and the single clock that drives every loader on the page.
  *
- * Only the track changes, and only in brightness. The train is byte-for-byte identical in all eight
- * frames:
- *
- *   1. The sleepers light in sequence, one crest every SLEEPERS_PER_CREST ties, stepping toward
- *      the viewer. They are lit by rank rather than by a fixed wavelength — perspective packs the
- *      ties closer toward the far end, so a single wavelength beats against them and shimmers
- *      instead of marching.
- *   2. The ballast and rails shimmer at a fifth of that amplitude, so the ties read as the thing
- *      streaming past rather than the whole image pulsing.
- *
- * Brightness is stepped into a few discrete levels rather than ramped smoothly, which is both what
- * real palette cycling does and what keeps the tone count low enough to precompute.
- *
- * Nothing is fetched: the sprite decodes synchronously from a string, so there is no image request
- * and no blank first frame. That matters here specifically, because the app inlines to a single
- * index.html so it can arrive in one request before you lose signal underground.
+ * Nothing is fetched: the sprite decodes from a string at module load, so there is no image request
+ * and no blank first frame. That matters here specifically, because this is the animation shown
+ * *while the network is being used* — and the app inlines to a single index.html so it can arrive
+ * in one request before you lose signal underground. The empty state, which is not on that critical
+ * path, uses the GIF instead.
  */
-import {
-  AXIS_X,
-  AXIS_Y,
-  CANVAS_H,
-  CANVAS_W,
-  PALETTE,
-  RANKS,
-  TRACK,
-  TRAIN,
-} from './train-sprite';
-
-const FRAMES = 8;
-const FRAME_MS = 70;
-const LEVELS = 5; // discrete brightness steps in the cycle
-const SLEEPERS_PER_CREST = 3;
-const SHIMMER_WAVELENGTH = 16; // pixels along the track between ballast crests
-const SLEEPER_AMP = 0.34;
-const SHIMMER_AMP = 0.07;
-
-// ImageData is RGBA in byte order, so a Uint32 write on a little-endian machine (every platform a
-// browser runs on) lands as 0xAABBGGRR.
-function packed(r: number, g: number, b: number): number {
-  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-
-const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
-
-/*
- * Every tone any pixel can ever take, worked out once: palette entry × brightness level. At runtime
- * a pixel is a table lookup, so a frame costs one pass over the buffer with no arithmetic per pixel
- * and no garbage. Index 0 of the palette is transparent and stays transparent at every level.
- */
-function buildRamp(amp: number): Uint32Array {
-  const ramp = new Uint32Array((PALETTE.length + 1) * LEVELS);
-  for (let level = 0; level < LEVELS; level++) {
-    const k = 1 + amp * ((2 * level) / (LEVELS - 1) - 1);
-    for (let i = 0; i < PALETTE.length; i++) {
-      const n = parseInt(PALETTE[i].slice(1), 16);
-      ramp[(i + 1) * LEVELS + level] = packed(
-        clamp(((n >> 16) & 255) * k),
-        clamp(((n >> 8) & 255) * k),
-        clamp((n & 255) * k),
-      );
-    }
-  }
-  return ramp;
-}
-
-const SLEEPER_RAMP = buildRamp(SLEEPER_AMP);
-const SHIMMER_RAMP = buildRamp(SHIMMER_AMP);
-const FLAT_RAMP = buildRamp(0);
-
-/** Brightness level 0..LEVELS-1 for a cosine phase. */
-const levelOf = (phase: number) => Math.round(((Math.cos(phase * Math.PI * 2) + 1) / 2) * (LEVELS - 1));
-
-/*
- * Precomputed frames. There are only eight, they are 92×57, and they never vary, so building them
- * once at module load costs about 40KB of memory and reduces each repaint to a buffer copy. That is
- * the difference between a loader a phone can run a dozen of and one it can't.
- */
-const FRAME_BUFFERS: Uint32Array[] = [];
-for (let f = 0; f < FRAMES; f++) {
-  const t = f / FRAMES;
-  const buf = new Uint32Array(CANVAS_W * CANVAS_H);
-
-  for (let y = 0; y < CANVAS_H; y++) {
-    for (let x = 0; x < CANVAS_W; x++) {
-      const i = y * CANVAS_W + x;
-      const c = TRACK[i];
-      if (c === 0) continue;
-      const rank = RANKS[i];
-      if (rank > 0) {
-        buf[i] = SLEEPER_RAMP[c * LEVELS + levelOf((rank - 1) / SLEEPERS_PER_CREST + t)];
-      } else {
-        const s = x * AXIS_X + y * AXIS_Y;
-        buf[i] = SHIMMER_RAMP[c * LEVELS + levelOf(s / SHIMMER_WAVELENGTH - t)];
-      }
-    }
-  }
-
-  // The train is identical in every frame — it never moves and never changes tone.
-  for (let i = 0; i < TRAIN.length; i++) {
-    const c = TRAIN[i];
-    if (c !== 0) buf[i] = FLAT_RAMP[c * LEVELS + (LEVELS >> 1)];
-  }
-
-  FRAME_BUFFERS.push(buf);
-}
-
-// --- component ------------------------------------------------------------------------------------
+import { CANVAS_H, CANVAS_W, FRAME_BUFFERS, FRAME_MS, FRAMES } from './train-frames';
 
 export interface TrainLoaderOptions {
   /** Largest on-screen width in CSS pixels. Multiples of 92 land on exact pixel boundaries. */
@@ -130,7 +28,6 @@ interface Instance {
   ctx: CanvasRenderingContext2D;
   image: ImageData;
   pixels: Uint32Array;
-  frame: number;
 }
 
 // One rAF drives every loader on the page — a card list can hold a dozen of them, and a dozen
@@ -143,7 +40,6 @@ let currentFrame = 0;
 function paint(inst: Instance, frame: number): void {
   inst.pixels.set(FRAME_BUFFERS[frame]);
   inst.ctx.putImageData(inst.image, 0, 0);
-  inst.frame = frame;
 }
 
 function tickAll(now: number): void {
@@ -183,16 +79,11 @@ export function createTrainLoader(options: TrainLoaderOptions = {}): TrainLoader
 
   const ctx = canvas.getContext('2d')!;
   const image = ctx.createImageData(CANVAS_W, CANVAS_H);
-  const inst: Instance = {
-    ctx,
-    image,
-    pixels: new Uint32Array(image.data.buffer),
-    frame: 0,
-  };
+  const inst: Instance = { ctx, image, pixels: new Uint32Array(image.data.buffer) };
 
   // Paint immediately, so the train is there before the first rAF — and so it is still there, held
-  // still, when the reader has asked for reduced motion. Joining mid-cycle keeps every loader on
-  // the page in step with the shared clock.
+  // still, when the reader has asked for reduced motion. Joining at the shared clock's current
+  // frame keeps every loader on the page in step.
   paint(inst, currentFrame);
 
   instances.add(inst);

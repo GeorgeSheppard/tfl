@@ -1,0 +1,16 @@
+# Cache rules for the Cloudflare Workers static assets in dist/ (see wrangler.jsonc).
+# Custom headers here only apply to static assets, not to anything a Worker generates.
+
+# Vite fingerprints everything under /assets/ with a content hash, so the filename changes whenever
+# the contents do. That makes it safe to cache these for a year and never revalidate — the only way
+# to get a different file is to ask for a different URL.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The HTML is the opposite case: same URL forever, new contents on every deploy. It has to be
+# revalidated each time, or a stale index.html would keep pointing at hashed assets that no longer
+# exist. no-cache means "check with the server", not "don't store" — a 304 is cheap.
+/
+  Cache-Control: public, no-cache
+/index.html
+  Cache-Control: public, no-cache

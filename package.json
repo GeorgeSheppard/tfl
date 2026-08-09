@@ -9,6 +9,8 @@
     "dev": "vite",
     "fetch:schema": "curl -o openapi.json https://raw.githubusercontent.com/GeorgeSheppard/api.georgesheppard.dev/master/generated/openapi/georgesheppard-spec.json",
     "generate:api": "orval --config orval.config.ts",
+    "build:sprite": "node scripts/build-train-sprite.mjs",
+    "build:gif": "node scripts/build-train-gif.mjs",
     "prebuild": "pnpm fetch:schema && pnpm generate:api",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

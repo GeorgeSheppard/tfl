@@ -86,3 +86,39 @@ Two details carry the whole effect, and both are measured from the art rather th
 
 The eight frames are precomputed at module load into one buffer each, so a repaint is a buffer
 copy, and a single `requestAnimationFrame` drives every loader on the page.
+
+### Two copies, on purpose
+
+The animation ships twice, in two forms, because the two places it appears have opposite needs:
+
+| | Card loading state | Empty state (no stations) |
+| --- | --- | --- |
+| Form | `<canvas>`, painted from `src/train-frames.ts` | `<img>`, `src/district-train.gif` |
+| Delivery | inlined into `index.html` | separate fingerprinted file |
+| Cost | 3.4KB gzipped, every load | 15KB, once, then cached for a year |
+
+The card loader appears *while the network is being used*, so it can't depend on a second request —
+it decodes from a string with no image fetch and no blank first frame. The empty state is
+decoration nobody is waiting on, so making every load carry another 15KB for it would be backwards.
+
+Both come from the same `src/train-frames.ts`, so they can't drift:
+
+```bash
+pnpm build:gif   # re-encodes the GIF from the frames the canvas paints
+```
+
+`scripts/build-train-gif.mjs` loads that module through Vite rather than Node's own loader, so
+TypeScript and extensionless imports resolve exactly as they do in the build.
+
+### Caching
+
+The GIF lives in `src/` rather than `public/` so Vite fingerprints it — change the animation and the
+filename changes with it. That is what makes the `immutable` rule in `public/_headers` safe: a stale
+copy is unreachable, because new contents mean a new URL. `index.html` gets `no-cache` for the
+opposite reason — same URL forever, new contents each deploy.
+
+Keeping it out of the inlined bundle needs a small `post` plugin in `vite.config.ts`, since
+`vite-plugin-singlefile` sets `assetsInlineLimit = () => true`. That plugin also sets `base` to
+`./`, which has to be undone: Vite writes the asset URL relative to the JS chunk in `assets/`, and
+that chunk then gets inlined into `index.html` at the root, leaving the reference pointing a
+directory too high.

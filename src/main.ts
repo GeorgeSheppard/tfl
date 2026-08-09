@@ -4,6 +4,7 @@ import { addFavourite, favouriteId, getFavourites, removeFavourite } from './sto
 import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
 import { createTrainLoader } from './train-loader';
+import trainGifUrl from './district-train.gif';
 import { Arrival, Favourite, Station } from './types';
 
 const favouritesEl = document.querySelector<HTMLDivElement>('#favourites')!;
@@ -67,7 +68,15 @@ function renderFavourites(): void {
   favouritesEl.innerHTML = '';
 
   if (favourites.length === 0) {
-    favouritesEl.innerHTML = `<p class="empty">No stations yet. Tap "+ Add" to add your first one.</p>`;
+    // The GIF rather than the canvas loader: this is decoration, not a loading indicator, and as a
+    // separate fingerprinted file it stays out of the single-request payload that everyone pays for
+    // (see vite.config.ts). Nothing is waiting on it, so arriving a moment late costs nothing.
+    favouritesEl.innerHTML = `
+      <div class="empty">
+        <img class="empty-train" src="${trainGifUrl}" alt="" width="92" height="57" decoding="async" />
+        <p>No stations yet. Tap "+ Add" to add your first one.</p>
+      </div>
+    `;
     return;
   }
 
