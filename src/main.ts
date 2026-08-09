@@ -23,7 +23,13 @@ const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected
 const stepBackBtn = document.querySelector<HTMLButtonElement>('#step-back-btn')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
 
-function formatEta(seconds: number): string {
+function isTrainAtPlatform(location: string): boolean {
+  return /\bPlatform\s*\d*\s*$/i.test(location);
+}
+
+function formatEta(seconds: number, location?: string): string {
+  // If train is at platform, show "Now" regardless of timeToStationSeconds
+  if (location && isTrainAtPlatform(location)) return 'Now';
   if (seconds < 30) return 'Due';
   return `${Math.round(seconds / 60)} min`;
 }
@@ -51,13 +57,6 @@ function cleanCurrentLocation(location: string): string {
   if (!match) return location;
   const stripped = match[1].trim();
   return stripped.toLowerCase() === 'at' || stripped === '' ? location : stripped;
-}
-
-const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
-
-function directionLabelFor(arrival: Arrival): string {
-  const compass = COMPASS_DIRECTIONS.find((d) => arrival.platformName.includes(d));
-  return compass ?? `towards ${cleanDestinationLabel(arrival.destinationName)}`;
 }
 
 function lineBadgeHtml(lineId: string, lineName: string): string {
@@ -103,6 +102,7 @@ function renderFavourites(): void {
     const card = document.createElement('article');
     card.className = 'card';
     card.dataset.id = favourite.id;
+    card.dataset.loaded = 'false';
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
     card.innerHTML = `
@@ -172,7 +172,7 @@ function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
 
 // e.g. [Due, 300, 1140] -> "Due, 5, 19 min" — one shared "min" suffix instead of repeating it.
 function formatEtaList(arrivals: Arrival[]): string {
-  const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds));
+  const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds, a.currentLocation));
   return labels.map((label, i) => (i === labels.length - 1 ? label : label.replace(' min', ''))).join(', ');
 }
 
@@ -205,7 +205,12 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   const controller = new AbortController();
   inFlightRequests.set(favourite.id, controller);
 
-  timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  // Only show loading state if this is the first load
+  const isFirstLoad = card.dataset.loaded === 'false';
+  if (isFirstLoad) {
+    timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  }
+
   refreshBtn.disabled = true;
   refreshBtn.classList.add('spinning');
 
@@ -219,17 +224,20 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
 
     if (arrivals.length === 0) {
       timesEl.innerHTML = `<span class="no-arrivals">No arrivals</span>`;
+      card.dataset.loaded = 'true';
       return;
     }
 
     const groups = groupArrivalsByDestination(arrivals);
     timesEl.innerHTML = groups.map((group) => renderArrivalGroup(group)).join('');
+    card.dataset.loaded = 'true';
   } catch (error) {
     // Don't show error if request was aborted (user triggered a new request)
     if (error instanceof Error && error.name === 'AbortError') {
       return;
     }
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
+    card.dataset.loaded = 'true';
   } finally {
     // Clean up the controller if it's the current one
     if (inFlightRequests.get(favourite.id) === controller) {
@@ -302,48 +310,48 @@ function renderStationResults(stations: Station[]): void {
   }
 }
 
-async function handleStationSelected(station: Station): Promise<void> {
+// "inbound"/"outbound" is just TfL's internal routing convention — meaningless to a rider picking
+// a direction. What matches the tube map and platform signage is the compass direction
+// (Northbound/Southbound/etc), so prefer that when the backend found one. It isn't always
+// available (best-effort, derived from live data at cache-build time), so fall back to the
+// destination(s) this direction actually goes towards — a line that forks past this station has
+// more than one.
+function directionLabelFor(compass: string | undefined, towards: string[]): string {
+  if (compass) return compass;
+  return `towards ${towards.map(cleanDestinationLabel).join(' / ')}`;
+}
+
+function handleStationSelected(station: Station): void {
   currentStation = station;
   selectedStationNameEl.textContent = station.name;
   stationPickerEl.classList.add('hidden');
   routePickerEl.classList.remove('hidden');
 
-  stepResultsEl.innerHTML = `<p class="loading">Loading lines…</p>`;
   hideStepBack();
 
-  try {
-    // High limit here — this is a live snapshot used only to discover which lines/directions
-    // are currently running at this station, not the arrivals themselves.
-    const arrivals = await getArrivals(station.id, { limit: 50 });
-    const byLineDirection = new Map<string, RouteOption>();
-    for (const arrival of arrivals) {
-      const key = `${arrival.lineId}:${arrival.direction}`;
-      if (!byLineDirection.has(key)) {
-        byLineDirection.set(key, {
-          lineId: arrival.lineId,
-          lineName: arrival.lineName,
-          direction: arrival.direction as GetTflArrivalsDirection,
-          directionLabel: directionLabelFor(arrival),
-        });
-      }
-    }
-    routeOptions = [...byLineDirection.values()];
+  // Convert pre-computed lines data to route options
+  const lines = station.lines ?? [];
+  routeOptions = lines.map((line) => ({
+    lineId: line.lineId,
+    lineName: line.lineName,
+    direction: line.direction as GetTflArrivalsDirection,
+    directionLabel: directionLabelFor(line.compass, line.towards),
+  }));
 
-    if (routeOptions.length === 0) {
-      stepResultsEl.innerHTML = `<p class="empty">No live arrivals right now, try again later</p>`;
-      return;
-    }
-
-    const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
-    if (distinctLineIds.size === 1) {
-      // Nothing to pick between — skip straight to the direction step.
-      showDirections(routeOptions[0].lineId, undefined);
-    } else {
-      showLines();
-    }
-  } catch {
-    stepResultsEl.innerHTML = `<p class="error">Couldn't load lines for this station</p>`;
+  if (routeOptions.length === 0) {
+    stepResultsEl.innerHTML = `<p class="empty">No lines available for this station</p>`;
+    return;
   }
+
+  const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
+  if (distinctLineIds.size === 1) {
+    // Nothing to pick between — skip straight to the direction step.
+    showDirections(routeOptions[0].lineId, undefined);
+  } else {
+    showLines();
+  }
+
+  stepResultsEl.innerHTML = '';
 }
 
 function showStepBack(label: string, onClick: () => void): void {
