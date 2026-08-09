@@ -6,7 +6,8 @@
  * rushing road: keep the vehicle still, cycle the colours of the stripes underneath it, and the
  * eye supplies the motion.
  *
- * Three things move, in descending order of how much work they do:
+ * Only the track changes, and only in brightness. The train is byte-for-byte identical in all eight
+ * frames:
  *
  *   1. The sleepers light in sequence, one crest every SLEEPERS_PER_CREST ties, stepping toward
  *      the viewer. They are lit by rank rather than by a fixed wavelength — perspective packs the
@@ -14,7 +15,6 @@
  *      instead of marching.
  *   2. The ballast and rails shimmer at a fifth of that amplitude, so the ties read as the thing
  *      streaming past rather than the whole image pulsing.
- *   3. The train bobs a single pixel, which is a whole-sprite offset rather than an edit to it.
  *
  * Brightness is stepped into a few discrete levels rather than ramped smoothly, which is both what
  * real palette cycling does and what keeps the tone count low enough to precompute.
@@ -103,15 +103,10 @@ for (let f = 0; f < FRAMES; f++) {
     }
   }
 
-  // Suspension bob: one pixel, held rather than eased, so it reads as pixels moving.
-  const bob = Math.sin(t * Math.PI * 2 * 2) > 0.4 ? 1 : 0;
-  for (let y = CANVAS_H - 1; y >= 0; y--) {
-    const sy = y - bob;
-    if (sy < 0) continue;
-    for (let x = 0; x < CANVAS_W; x++) {
-      const c = TRAIN[sy * CANVAS_W + x];
-      if (c !== 0) buf[y * CANVAS_W + x] = FLAT_RAMP[c * LEVELS + (LEVELS >> 1)];
-    }
+  // The train is identical in every frame — it never moves and never changes tone.
+  for (let i = 0; i < TRAIN.length; i++) {
+    const c = TRAIN[i];
+    if (c !== 0) buf[i] = FLAT_RAMP[c * LEVELS + (LEVELS >> 1)];
   }
 
   FRAME_BUFFERS.push(buf);

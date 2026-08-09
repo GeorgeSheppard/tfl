@@ -74,7 +74,7 @@ The animation moves nothing. Every pixel stays where the artist put it and only 
 which is how arcade racers faked a rushing road: keep the vehicle still, cycle the colours of the
 stripes underneath it, and the eye supplies the motion. The sleepers light in sequence toward the
 viewer, the ballast and rails shimmer at a fifth of that amplitude so the ties read as the thing
-streaming past, and the train bobs a single pixel.
+streaming past. The train itself is byte-for-byte identical in every frame.
 
 Two details carry the whole effect, and both are measured from the art rather than guessed:
 
