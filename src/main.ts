@@ -103,6 +103,7 @@ function renderFavourites(): void {
     const card = document.createElement('article');
     card.className = 'card';
     card.dataset.id = favourite.id;
+    card.dataset.loaded = 'false';
     card.style.setProperty('--line-color', lineColor(favourite.lineId));
     card.style.setProperty('--line-text-color', lineTextColor(favourite.lineId));
     card.innerHTML = `
@@ -205,7 +206,12 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
   const controller = new AbortController();
   inFlightRequests.set(favourite.id, controller);
 
-  timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  // Only show loading state if this is the first load
+  const isFirstLoad = card.dataset.loaded === 'false';
+  if (isFirstLoad) {
+    timesEl.innerHTML = `<span class="loading">Loading…</span>`;
+  }
+
   refreshBtn.disabled = true;
   refreshBtn.classList.add('spinning');
 
@@ -219,17 +225,20 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
 
     if (arrivals.length === 0) {
       timesEl.innerHTML = `<span class="no-arrivals">No arrivals</span>`;
+      card.dataset.loaded = 'true';
       return;
     }
 
     const groups = groupArrivalsByDestination(arrivals);
     timesEl.innerHTML = groups.map((group) => renderArrivalGroup(group)).join('');
+    card.dataset.loaded = 'true';
   } catch (error) {
     // Don't show error if request was aborted (user triggered a new request)
     if (error instanceof Error && error.name === 'AbortError') {
       return;
     }
     timesEl.innerHTML = `<span class="error">Couldn't load times</span>`;
+    card.dataset.loaded = 'true';
   } finally {
     // Clean up the controller if it's the current one
     if (inFlightRequests.get(favourite.id) === controller) {
