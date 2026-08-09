@@ -1,5 +1,5 @@
 import './style.css';
-import { getArrivals, searchStations } from './api';
+import { getArrivals, getStationLines, searchStations } from './api';
 import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
 import { GetTflArrivalsDirection } from './api/generated';
 import { lineColor, lineTextColor } from './lines';
@@ -57,13 +57,6 @@ function cleanCurrentLocation(location: string): string {
   if (!match) return location;
   const stripped = match[1].trim();
   return stripped.toLowerCase() === 'at' || stripped === '' ? location : stripped;
-}
-
-const COMPASS_DIRECTIONS = ['Northbound', 'Southbound', 'Eastbound', 'Westbound'];
-
-function directionLabelFor(arrival: Arrival): string {
-  const compass = COMPASS_DIRECTIONS.find((d) => arrival.platformName.includes(d));
-  return compass ?? `towards ${cleanDestinationLabel(arrival.destinationName)}`;
 }
 
 function lineBadgeHtml(lineId: string, lineName: string): string {
@@ -266,6 +259,7 @@ interface RouteOption {
 
 let currentStation: Station | undefined;
 let routeOptions: RouteOption[] = [];
+let stationLinesMap: Map<string, RouteOption[]> = new Map();
 
 let searchDebounce: number | undefined;
 
@@ -323,43 +317,25 @@ async function handleStationSelected(station: Station): Promise<void> {
   stationPickerEl.classList.add('hidden');
   routePickerEl.classList.remove('hidden');
 
-  stepResultsEl.innerHTML = `<p class="loading">Loading lines…</p>`;
   hideStepBack();
 
-  try {
-    // High limit here — this is a live snapshot used only to discover which lines/directions
-    // are currently running at this station, not the arrivals themselves.
-    // Use 200 to handle busy stations with many lines/directions (e.g. Victoria, King's Cross).
-    const arrivals = await getArrivals(station.id, { limit: 200 });
-    const byLineDirection = new Map<string, RouteOption>();
-    for (const arrival of arrivals) {
-      const key = `${arrival.lineId}:${arrival.direction}`;
-      if (!byLineDirection.has(key)) {
-        byLineDirection.set(key, {
-          lineId: arrival.lineId,
-          lineName: arrival.lineName,
-          direction: arrival.direction as GetTflArrivalsDirection,
-          directionLabel: directionLabelFor(arrival),
-        });
-      }
-    }
-    routeOptions = [...byLineDirection.values()];
+  // Use pre-computed station lines data instead of fetching live arrivals
+  routeOptions = stationLinesMap.get(station.id) ?? [];
 
-    if (routeOptions.length === 0) {
-      stepResultsEl.innerHTML = `<p class="empty">No live arrivals right now, try again later</p>`;
-      return;
-    }
-
-    const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
-    if (distinctLineIds.size === 1) {
-      // Nothing to pick between — skip straight to the direction step.
-      showDirections(routeOptions[0].lineId, undefined);
-    } else {
-      showLines();
-    }
-  } catch (error) {
-    stepResultsEl.innerHTML = `<p class="error">Couldn't load lines for this station</p>`;
+  if (routeOptions.length === 0) {
+    stepResultsEl.innerHTML = `<p class="empty">No lines available for this station</p>`;
+    return;
   }
+
+  const distinctLineIds = new Set(routeOptions.map((o) => o.lineId));
+  if (distinctLineIds.size === 1) {
+    // Nothing to pick between — skip straight to the direction step.
+    showDirections(routeOptions[0].lineId, undefined);
+  } else {
+    showLines();
+  }
+
+  stepResultsEl.innerHTML = '';
 }
 
 function showStepBack(label: string, onClick: () => void): void {
@@ -449,5 +425,23 @@ searchInput.addEventListener('input', () => {
   window.clearTimeout(searchDebounce);
   searchDebounce = window.setTimeout(handleStationSearch, 300);
 });
+
+// Load pre-computed station lines data on page load
+getStationLines()
+  .then((stations) => {
+    // Build a map of station ID -> route options for instant lookups
+    for (const station of stations) {
+      const options: RouteOption[] = station.lines.map((line) => ({
+        lineId: line.lineId,
+        lineName: line.lineName,
+        direction: line.direction as GetTflArrivalsDirection,
+        directionLabel: line.direction,
+      }));
+      stationLinesMap.set(station.stationId, options);
+    }
+  })
+  .catch((error) => {
+    console.error('Failed to load station lines:', error);
+  });
 
 renderFavourites();
