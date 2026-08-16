@@ -190,6 +190,21 @@ interface ArrivalGroup {
   arrivals: Arrival[];
 }
 
+interface DirectionGroup {
+  direction: string;
+  destinations: ArrivalGroup[];
+}
+
+// TfL's platformName is what's physically printed on the platform (e.g. "Westbound - Platform
+// 6") — the label a regular rider already knows, unlike destinationName, which varies by branch
+// and reversal (see the "Check front of train" fallback in the backend). Pull that label out so
+// arrivals can be grouped by it first.
+function platformDirection(platformName: string): string {
+  const match = platformName.match(/^(.*?)\s*-\s*Platform/i);
+  const direction = (match ? match[1] : platformName).trim();
+  return direction || 'Other';
+}
+
 // Groups arrivals by destination — e.g. if trains to Richmond are 1/3/5 minutes away and one to
 // Wimbledon is 7, Richmond and Wimbledon are shown as two rows. Only the destination is worth
 // grouping by: once a train's already past this station and heading your way, the specific stop
@@ -210,6 +225,27 @@ function groupArrivalsByDestination(arrivals: Arrival[]): ArrivalGroup[] {
     .sort((a, b) => a.arrivals[0].timeToStationSeconds - b.arrivals[0].timeToStationSeconds);
 }
 
+// Splits arrivals by platform direction first, then by destination within each — so e.g.
+// Piccadilly line trains to Heathrow, Rayners Lane and Uxbridge (all westbound, different
+// branches) show up grouped under one "Westbound" heading instead of as unrelated destinations.
+function groupArrivalsByDirection(arrivals: Arrival[]): DirectionGroup[] {
+  const byDirection = new Map<string, Arrival[]>();
+  for (const arrival of arrivals) {
+    const direction = platformDirection(arrival.platformName);
+    const group = byDirection.get(direction);
+    if (group) group.push(arrival);
+    else byDirection.set(direction, [arrival]);
+  }
+
+  return [...byDirection.entries()]
+    .map(([direction, group]) => ({ direction, destinations: groupArrivalsByDestination(group) }))
+    .sort(
+      (a, b) =>
+        a.destinations[0].arrivals[0].timeToStationSeconds -
+        b.destinations[0].arrivals[0].timeToStationSeconds
+    );
+}
+
 // e.g. [Due, 300, 1140] -> "Due, 5, 19 min" — one shared "min" suffix instead of repeating it.
 function formatEtaList(arrivals: Arrival[]): string {
   const labels = arrivals.map((a) => formatEta(a.timeToStationSeconds, a.currentLocation));
@@ -227,6 +263,15 @@ function renderArrivalGroup(group: ArrivalGroup): string {
         </div>
         <span class="arrival-location">${cleanCurrentLocation(next.currentLocation)}</span>
       </div>
+    </div>
+  `;
+}
+
+function renderDirectionGroup(group: DirectionGroup): string {
+  return `
+    <div class="direction-group">
+      <div class="direction-header">${group.direction}</div>
+      ${group.destinations.map((destination) => renderArrivalGroup(destination)).join('')}
     </div>
   `;
 }
@@ -267,8 +312,8 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
       return;
     }
 
-    const groups = groupArrivalsByDestination(arrivals);
-    timesEl.innerHTML = groups.map((group) => renderArrivalGroup(group)).join('');
+    const groups = groupArrivalsByDirection(arrivals);
+    timesEl.innerHTML = groups.map((group) => renderDirectionGroup(group)).join('');
     card.dataset.loaded = 'true';
   } catch (error) {
     // Don't show error if request was aborted (user triggered a new request)

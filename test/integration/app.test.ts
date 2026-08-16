@@ -56,6 +56,71 @@ describe('a station already selected', () => {
   });
 });
 
+describe('arrivals grouped by direction', () => {
+  it('groups destinations under the platform direction printed at the station, not just by destination', async () => {
+    // Earl's Court, Piccadilly line: two branches share the westbound platform (Heathrow via
+    // both terminal loops, plus Rayners Lane/Uxbridge), and eastbound trains all continue to
+    // Cockfosters. A rider knows "Westbound"/"Eastbound" — not every branch destination.
+    const favourite: Favourite = {
+      id: '940GZZLUECT:piccadilly',
+      stopPointId: '940GZZLUECT',
+      stopName: "Earl's Court Underground Station",
+      lineId: 'piccadilly',
+      lineName: 'Piccadilly',
+    };
+    localStorage.setItem(FAVOURITES_KEY, JSON.stringify([favourite]));
+
+    const arrivals: Arrival[] = [
+      {
+        lineId: 'piccadilly',
+        lineName: 'Piccadilly',
+        platformName: 'Westbound - Platform 6',
+        direction: 'inbound',
+        destinationName: 'Heathrow Terminal 5 Underground Station',
+        timeToStationSeconds: 60,
+        expectedArrival: new Date().toISOString(),
+        currentLocation: 'Approaching Earl’s Court',
+      },
+      {
+        lineId: 'piccadilly',
+        lineName: 'Piccadilly',
+        platformName: 'Westbound - Platform 6',
+        direction: 'inbound',
+        destinationName: 'Rayners Lane Underground Station',
+        timeToStationSeconds: 180,
+        expectedArrival: new Date().toISOString(),
+        currentLocation: 'Between South Kensington and Gloucester Road',
+      },
+      {
+        lineId: 'piccadilly',
+        lineName: 'Piccadilly',
+        platformName: 'Eastbound - Platform 5',
+        direction: 'outbound',
+        destinationName: 'Cockfosters Underground Station',
+        timeToStationSeconds: 180,
+        expectedArrival: new Date().toISOString(),
+        currentLocation: 'Left Barons Court',
+      },
+    ];
+    mockFetchResponses({ '/tfl/arrivals': { arrivals } });
+
+    await import('../../src/main');
+    await flushAsync();
+
+    const card = document.querySelector('#favourites .card')!;
+    const directionHeaders = card.querySelectorAll('.direction-header');
+    expect([...directionHeaders].map((el) => el.textContent)).toEqual(['Westbound', 'Eastbound']);
+
+    const [westbound, eastbound] = card.querySelectorAll('.direction-group');
+    expect(
+      [...westbound.querySelectorAll('.arrival-destination')].map((el) => el.textContent)
+    ).toEqual(['Heathrow Terminal 5', 'Rayners Lane']);
+    expect(
+      [...eastbound.querySelectorAll('.arrival-destination')].map((el) => el.textContent)
+    ).toEqual(['Cockfosters']);
+  });
+});
+
 describe('adding a station from a blank slate', () => {
   it('subscribes directly when the station has only one line', async () => {
     const station: Station = {
