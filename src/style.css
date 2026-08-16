@@ -198,14 +198,28 @@ input:focus-visible {
   margin-top: 0.6rem;
 }
 
+.direction-group + .direction-group {
+  border-top: 1px solid var(--border);
+  margin-top: 0.3rem;
+  padding-top: 0.2rem;
+}
+
+.direction-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .arrival-group {
   border-top: 1px solid var(--border);
   padding: 0.4rem 0;
 }
 
-.arrival-group:first-child {
+.direction-header + .arrival-group {
   border-top: none;
-  padding-top: 0.1rem;
+  padding-top: 0.3rem;
 }
 
 .arrival {
