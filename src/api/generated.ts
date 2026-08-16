@@ -499,14 +499,6 @@ export type PostMiseParseRecipe500 = {
   error: string;
 };
 
-export type GetTflStationsParams = {
-/**
- * Station name to search for
- * @minLength 1
- */
-query: string;
-};
-
 export type GetTflStations200StationsItemLinesItem = {
   /** TfL Line ID */
   lineId: string;
@@ -539,9 +531,10 @@ export type GetTflArrivalsParams = {
  */
 stopPointId: string;
 /**
- * Filter to a specific line, e.g. "victoria"
+ * TfL line ID, e.g. "victoria"
+ * @minLength 1
  */
-lineId?: string;
+lineId: string;
 /**
  * Maximum number of arrivals to return
  * @minimum 1
@@ -1104,27 +1097,20 @@ export const postMiseParseRecipe = async (postMiseParseRecipeBody: PostMiseParse
 
 
 
-export const getGetTflStationsUrl = (params: GetTflStationsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getGetTflStationsUrl = () => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/tfl/stations?${stringifiedParams}` : `/tfl/stations`
+  return `/tfl/stations`
 }
 
 /**
- * Search for tube stations by name
+ * List every tube station and the lines that serve it. Intended to be fetched once and cached client-side rather than queried per search.
  */
-export const getTflStations = async (params: GetTflStationsParams, options?: Parameters<typeof customFetch>[1]): Promise<GetTflStations200> => {
+export const getTflStations = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetTflStations200> => {
 
-  return customFetch<GetTflStations200>(getGetTflStationsUrl(params),
+  return customFetch<GetTflStations200>(getGetTflStationsUrl(),
   {
     ...options,
     method: 'GET'
@@ -1151,7 +1137,7 @@ export const getGetTflArrivalsUrl = (params: GetTflArrivalsParams,) => {
 }
 
 /**
- * Get the next arrivals for a station, optionally filtered by line
+ * Get the next arrivals for a line at a station
  */
 export const getTflArrivals = async (params: GetTflArrivalsParams, options?: Parameters<typeof customFetch>[1]): Promise<GetTflArrivals200> => {
 
