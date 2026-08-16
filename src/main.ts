@@ -1,6 +1,13 @@
 import './style.css';
-import { getArrivals, searchStations } from './api';
-import { addFavourite, favouriteId, getFavourites, removeFavourite } from './storage';
+import { getArrivals, fetchAllStations } from './api';
+import {
+  addFavourite,
+  favouriteId,
+  getFavourites,
+  removeFavourite,
+  getCachedStations,
+  saveCachedStations,
+} from './storage';
 import { lineColor, lineTextColor } from './lines';
 import { Arrival, Favourite, Station } from './types';
 
@@ -20,6 +27,23 @@ const routePickerEl = document.querySelector<HTMLDivElement>('#route-picker')!;
 const changeStationBtn = document.querySelector<HTMLButtonElement>('#change-station-btn')!;
 const selectedStationNameEl = document.querySelector<HTMLSpanElement>('#selected-station-name')!;
 const stepResultsEl = document.querySelector<HTMLDivElement>('#step-results')!;
+
+// The full station + line list. Seeded from localStorage so search works instantly and offline
+// (e.g. underground) — refreshStationsCache() then tries to fetch a fresh copy in the background
+// and overwrites both this and localStorage if it succeeds. If it fails, whatever's already
+// cached just keeps being used; there's no error state for this, since the whole point is that a
+// failed fetch shouldn't matter.
+let stations: Station[] = getCachedStations();
+
+async function refreshStationsCache(): Promise<void> {
+  try {
+    const fresh = await fetchAllStations();
+    stations = fresh;
+    saveCachedStations(fresh);
+  } catch {
+    // Keep using whatever's already cached (possibly nothing, if this is the first ever load).
+  }
+}
 
 // TfL reports a specific platform for locations all along the route (e.g. "Approaching Bayswater
 // Platform 1"), not just for the station being queried — so "ends with Platform N" is not enough
@@ -265,8 +289,6 @@ async function loadArrivalsForCard(card: HTMLElement, favourite: Favourite): Pro
 
 // --- Add-station dialog -----------------------------------------------------------------------
 
-let searchDebounce: number | undefined;
-
 function openAddDialog(): void {
   searchInput.value = '';
   stationResultsEl.innerHTML = '';
@@ -282,29 +304,30 @@ function backToStationPicker(): void {
   searchInput.focus();
 }
 
-async function handleStationSearch(): Promise<void> {
-  const query = searchInput.value.trim();
+// Client-side filter over the cached station list — instant, and works offline since it never
+// touches the network. Runs on every keystroke since it's just an in-memory array scan.
+function handleStationSearch(): void {
+  const query = searchInput.value.trim().toLowerCase();
   if (query.length < 2) {
     stationResultsEl.innerHTML = '';
     return;
   }
 
-  try {
-    const stations = await searchStations(query);
-    renderStationResults(stations);
-  } catch {
-    stationResultsEl.innerHTML = `<p class="error">Search failed, try again</p>`;
-  }
+  const results = stations.filter((station) => station.name.toLowerCase().includes(query));
+  renderStationResults(results);
 }
 
-function renderStationResults(stations: Station[]): void {
+function renderStationResults(results: Station[]): void {
   stationResultsEl.innerHTML = '';
-  if (stations.length === 0) {
-    stationResultsEl.innerHTML = `<p class="empty">No stations found</p>`;
+  if (results.length === 0) {
+    stationResultsEl.innerHTML =
+      stations.length === 0
+        ? `<p class="empty">Station list not loaded yet — connect to the internet once to fetch it</p>`
+        : `<p class="empty">No stations found</p>`;
     return;
   }
 
-  for (const station of stations) {
+  for (const station of results) {
     const btn = document.createElement('button');
     btn.className = 'result-btn';
     btn.textContent = station.name;
@@ -362,9 +385,10 @@ addBtn.addEventListener('click', openAddDialog);
 cancelBtn.addEventListener('click', () => dialog.close());
 changeStationBtn.addEventListener('click', backToStationPicker);
 
-searchInput.addEventListener('input', () => {
-  window.clearTimeout(searchDebounce);
-  searchDebounce = window.setTimeout(handleStationSearch, 300);
-});
+searchInput.addEventListener('input', handleStationSearch);
 
 renderFavourites();
+
+// Fire-and-forget: try to get a fresh station list on load, but the app is fully usable on
+// whatever's already cached (or empty, on a first-ever load with no connection) in the meantime.
+refreshStationsCache();

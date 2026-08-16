@@ -3,6 +3,7 @@ import { Favourite, Station, Arrival } from '../../src/types';
 import { flushAsync, mockFetchResponses, mountAppShell } from './test-utils';
 
 const FAVOURITES_KEY = 'tfl.favourites';
+const STATIONS_KEY = 'tfl.stations';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -74,8 +75,7 @@ describe('adding a station from a blank slate', () => {
 
     const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
     searchInput.value = 'Victoria';
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(300); // search is debounced
+    searchInput.dispatchEvent(new Event('input', { bubbles: true })); // filtered client-side, no debounce
 
     const stationResult = document.querySelector<HTMLButtonElement>('#station-results .result-btn');
     expect(stationResult).not.toBeNull();
@@ -113,8 +113,7 @@ describe('adding a station from a blank slate', () => {
 
     const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
     searchInput.value = 'Oxford';
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(300); // search is debounced
+    searchInput.dispatchEvent(new Event('input', { bubbles: true })); // filtered client-side, no debounce
 
     const stationResult = document.querySelector<HTMLButtonElement>('#station-results .result-btn');
     expect(stationResult).not.toBeNull();
@@ -135,5 +134,58 @@ describe('adding a station from a blank slate', () => {
     expect(card).not.toBeNull();
     expect(card!.querySelector('h2')!.textContent).toBe('Oxford Circus Underground Station');
     expect(card!.querySelector('.subtitle')!.textContent).toContain('Victoria');
+  });
+});
+
+describe('station search when the network is unavailable', () => {
+  it('falls back to the cached station list instead of failing', async () => {
+    const cachedStation: Station = {
+      id: '940GZZLUVIC',
+      name: 'Victoria Underground Station',
+      lines: [{ lineId: 'victoria', lineName: 'Victoria' }],
+    };
+    localStorage.setItem(STATIONS_KEY, JSON.stringify([cachedStation]));
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/tfl/stations')) throw new Error('network unavailable');
+        if (url.includes('/tfl/arrivals')) {
+          return { ok: true, json: async () => ({ arrivals: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch call: ${url}`);
+      })
+    );
+
+    await import('../../src/main');
+    await flushAsync();
+
+    document.querySelector<HTMLButtonElement>('#add-btn')!.click();
+
+    const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
+    searchInput.value = 'Victoria';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const stationResult = document.querySelector<HTMLButtonElement>('#station-results .result-btn');
+    expect(stationResult).not.toBeNull();
+    expect(stationResult!.textContent).toBe('Victoria Underground Station');
+  });
+
+  it('shows a distinct message when nothing has ever been cached', async () => {
+    mockFetchResponses({ '/tfl/stations': { stations: [] } });
+
+    await import('../../src/main');
+    await flushAsync();
+
+    document.querySelector<HTMLButtonElement>('#add-btn')!.click();
+
+    const searchInput = document.querySelector<HTMLInputElement>('#station-search')!;
+    searchInput.value = 'Victoria';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(document.querySelector('#station-results .empty')!.textContent).toContain(
+      'not loaded yet'
+    );
   });
 });
